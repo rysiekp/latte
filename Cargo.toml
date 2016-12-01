@@ -1,0 +1,6 @@
+[package]
+name = "latte"
+version = "0.1.0"
+authors = ["Maciej Piktel <mp347205@students.mimuw.edu.pl>"]
+
+[dependencies]
