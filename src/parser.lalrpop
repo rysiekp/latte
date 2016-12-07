@@ -1,0 +1,147 @@
+use std::str::FromStr;
+use ast::*;
+
+grammar;
+
+pub Program: Program = {
+    <Function*> => Program(<>),
+};
+
+Function: Function = {
+    <Type> <Identifier> "(" <List<Arg, ",">> ")" <Block> => Function(<>),
+};
+
+List<T, Sep>: Vec<T> = {
+    <T?> => {
+        if let Some(t) = <> {
+            vec!(t)
+        } else {
+            vec!()
+        }
+    },
+    <ts: (<T> Sep)+> <t: T> => {
+        let mut ts = ts;
+        ts.push(t);
+        ts
+    },
+};
+
+Arg: Arg = {
+    Type Identifier => Arg(<>),
+};
+
+Stmt: Stmt = {
+    <Type> <List<Item, ","> >";" => Stmt::SDecl(<>),
+    <i: Identifier> "=" <e: Expr> ";" => Stmt::SAss(i, *e),
+    <Identifier> "++" ";" => Stmt::SInc(<>),
+    <Identifier> "--" ";" => Stmt::SDecr(<>),
+    "return" <Expr> ";" => Stmt::SRet(*<>),
+    "return" ";" => Stmt::SVRet,
+    "if" "(" <c: Expr> ")" <i: Block> => Stmt::SIf(*c, i),
+    "if" "(" <c: Expr> ")" <i: Block> "else" <e: Block> => Stmt::SIfElse(*c, i, e),
+    "while" "(" <c: Expr> ")" <w: Block> => Stmt::SWhile(*c, w),
+    <Predef> ";" => Stmt::SPredef(<>),
+    <Expr> ";" => Stmt::SExpr(*<>),
+};
+
+Item: Item = {
+    <i: Identifier> "=" <e: Expr> => Item::Init(i, *e),
+    <Identifier> => Item::NoInit(<>),
+};
+
+Block: Block = {
+    "{" <Stmt*> "}" => Block(<>),
+};
+
+Predef: Predef = {
+    "printInt" "(" <Expr> ")" => Predef::PrintInt(*<>),
+    "printString" "(" <Expr> ")" => Predef::PrintString(*<>),
+    "error" "(" ")" => Predef::Error,
+    "readInt" "(" ")" => Predef::ReadInt,
+    "readString" "(" ")" => Predef::ReadString,
+};
+
+Expr: Box<Expr> = {
+    <e1: Expr1> "||" <e2: Expr> => Box::new(Expr::EOp(e1, BinOp::Or, e2)),
+    Expr1,
+};
+
+Expr1: Box<Expr> = {
+    <e1: Expr2> "&&" <e2: Expr1> => Box::new(Expr::EOp(e1, BinOp::And, e2)),
+    Expr2,
+};
+
+Expr2: Box<Expr> = {
+    Expr2 RelOp Expr3 => Box::new(Expr::EOp(<>)),
+    Expr3,
+};
+
+Expr3: Box<Expr> = {
+    Expr3 AddOp Expr4 => Box::new(Expr::EOp(<>)),
+    Expr4,
+};
+
+Expr4: Box<Expr> = {
+    Expr4 MulOp Expr5 => Box::new(Expr::EOp(<>)),
+    Expr5,
+};
+
+Expr5: Box<Expr> = {
+    "-" <Expr6> => Box::new(Expr::ENeg(<>)),
+    "!" <Expr6> => Box::new(Expr::ENot(<>)),
+    Expr6,
+};
+
+Expr6: Box<Expr> = {
+    Identifier => Box::new(Expr::EVar(<>)),
+    Num => Box::new(Expr::EIntLit(<>)),
+    Bool => Box::new(Expr::EBoolLit(<>)),
+    String => Box::new(Expr::EStringLit(<>)),
+    <i: Identifier> "(" <l: List<Expr, ",">> ")" =>
+        Box::new(Expr::EApp(i, l.into_iter().map(|e| *e).collect::<Vec<Expr>>())),
+    "(" <Expr> ")",
+};
+
+RelOp: BinOp = {
+    "<" => BinOp::LT,
+    "<=" => BinOp::LE,
+    ">" => BinOp::GT,
+    ">=" => BinOp::GE,
+    "==" => BinOp::EQ,
+    "!=" => BinOp::NEQ,
+};
+
+AddOp: BinOp = {
+    "+" => BinOp::Add,
+    "-" => BinOp::Sub,
+};
+
+MulOp: BinOp = {
+    "*" => BinOp::Mul,
+    "/" => BinOp::Div,
+};
+
+
+Type: Type = {
+    "int" => Type::TInt,
+    "string" => Type::TString,
+    "bool" => Type::TBool,
+    "void" => Type::TVoid,
+};
+
+String: String = {
+    r#""([^"]*)""# => (<>).to_string(),
+};
+
+Bool: bool = {
+    "true" => true,
+    "false" => false,
+};
+
+Identifier: String = {
+    r"([a-zA-Z])+" => (<>).to_string()
+};
+
+Num: i32 = {
+    r"[0-9]+" => i32::from_str(<>).unwrap(),
+};
