@@ -1,29 +1,31 @@
+use lalrpop_util::ParseError;
 use std::str::FromStr;
+use parser_errors::ErrorType;
 use ast::*;
 
 grammar;
 
+extern {
+    type Error = (ErrorType, String, usize);
+}
+
 pub Program: Program = {
-    <Function*> => Program(<>),
+    <Def*> => Program(<>),
 };
 
-Function: Function = {
-    <Type> <Identifier> "(" <List<Arg, ",">> ")" <Block> => Function(<>),
+Def: Def = {
+    <Type> <Identifier> "(" <List<Arg, ",">> ")" <Block> => Def::DFun(<>),
 };
 
 List<T, Sep>: Vec<T> = {
-    <T?> => {
-        if let Some(t) = <> {
-            vec!(t)
+    <ts: (<T> Sep)*> <t: T?> =>
+        if let Some(t) = t {
+            let mut ts = ts;
+            ts.push(t);
+            ts
         } else {
-            vec!()
-        }
-    },
-    <ts: (<T> Sep)+> <t: T> => {
-        let mut ts = ts;
-        ts.push(t);
-        ts
-    },
+            ts
+        },
 };
 
 Arg: Arg = {
@@ -130,7 +132,15 @@ Type: Type = {
 };
 
 String: String = {
-    r#""([^"]*)""# => (<>).to_string(),
+    r#""([^"]*)""# => {
+      let mut res = String::new();
+      for (i, c) in (<>).chars().enumerate() {
+          if i > 0 && i < <>.len() - 1 {
+              res.push(c);
+          }
+      }
+      res
+  },
 };
 
 Bool: bool = {
@@ -139,9 +149,12 @@ Bool: bool = {
 };
 
 Identifier: String = {
-    r"([a-zA-Z])+" => (<>).to_string()
+    r"([a-zA-Z])+" => <>.to_string()
 };
 
 Num: i32 = {
-    r"[0-9]+" => i32::from_str(<>).unwrap(),
+    <loc: @L> <num: r"[0-9]+"> =>? match i32::from_str(num) {
+        Ok(i) => Ok(i),
+        _ => Err(ParseError::User { error: (ErrorType::OverflowError, num.to_string(), loc) }),
+    }
 };

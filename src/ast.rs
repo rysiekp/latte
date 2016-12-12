@@ -1,8 +1,10 @@
 #[derive(Debug)]
-pub struct Program(pub Vec<Function>);
+pub struct Program(pub Vec<Def>);
 
 #[derive(Debug)]
-pub struct Function(pub Type, pub String, pub Vec<Arg>, pub Block);
+pub enum Def {
+    DFun(Type, String, Vec<Arg>, Block),
+}
 
 #[derive(Debug)]
 pub struct Arg(pub Type, pub String);
@@ -74,6 +76,7 @@ pub enum Type {
     TString,
     TBool,
     TVoid,
+    TFunc(Box<Type>, Vec<Type>)
 }
 
 
