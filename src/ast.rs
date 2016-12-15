@@ -23,7 +23,6 @@ pub enum Stmt {
     SIf(Expr, Block),
     SIfElse(Expr, Block, Block),
     SWhile(Expr, Block),
-    SPredef(Predef),
     SExpr(Expr),
 }
 
@@ -42,19 +41,20 @@ pub enum Expr {
     EApp(String, Vec<Expr>),
     ENeg(Box<Expr>),
     ENot(Box<Expr>),
+    EPredef(Predef),
     EOp(Box<Expr>, BinOp, Box<Expr>),
 }
 
 #[derive(Debug)]
 pub enum Predef {
-    PrintInt(Expr),
-    PrintString(Expr),
+    PrintInt(Box<Expr>),
+    PrintString(Box<Expr>),
     Error,
     ReadInt,
     ReadString,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum BinOp {
     Add,
     Sub,
@@ -70,7 +70,7 @@ pub enum BinOp {
     Or,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Type {
     TInt,
     TString,

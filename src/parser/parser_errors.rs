@@ -1,9 +1,12 @@
+use lalrpop_util::ParseError;
 use std::io::Write;
 
 #[derive(Debug)]
 pub enum ErrorType {
     OverflowError,
 }
+
+type Error<'a> = ParseError<usize, (usize, &'a str), (ErrorType, String, usize)>;
 
 macro_rules! println_stderr(
     ($($arg:tt)*) => { {
@@ -12,21 +15,31 @@ macro_rules! println_stderr(
     } }
 );
 
-pub fn pretty_eof() {
+pub fn print_error<'a>(err: Error<'a>, input: &str) {
+    match err {
+        ParseError::InvalidToken { location } => invalid(input.to_string(), location),
+        ParseError::UnrecognizedToken { token: None, .. } => eof(),
+        ParseError::UnrecognizedToken { token: Some((beg, t, end)), .. } => unrecognized(input.to_string(), t.1, beg, end),
+        ParseError::User { error: (err_type, err, loc) } => user(input.to_string(), err_type, err, loc),
+        x => println!("{:?}", x),
+    }
+}
+
+fn eof() {
     println_stderr!("err: unexpected EOF");
 }
 
-pub fn pretty_invalid(s: String, loc: usize)  {
+fn invalid(s: String, loc: usize)  {
     let (line_no, token_no) = count_line_and_pos(&s, loc);
     println_stderr!("err: {}:{}: invalid token '{}'", line_no, token_no, s.chars().nth(loc).unwrap());
 }
 
-pub fn pretty_unrecognized(s: String, token: &str, beg: usize, end: usize) {
+fn unrecognized(s: String, token: &str, beg: usize, end: usize) {
     let (line_no, token_no) = count_line_and_pos(&s, beg);
     println_stderr!("err: {}:{}-{}: unexpected token '{}'", line_no, token_no, token_no + (end - beg), token);
 }
 
-pub fn pretty_user(s: String, err_type: ErrorType, err: String, loc: usize) {
+fn user(s: String, err_type: ErrorType, err: String, loc: usize) {
     let (line_no, token_no) = count_line_and_pos(&s, loc);
     match err_type {
         ErrorType::OverflowError => println_stderr!("err: {}:{}: integer number too large: {} ", line_no, token_no, err),

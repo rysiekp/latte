@@ -1,33 +1,33 @@
 extern crate lalrpop_util;
 
 pub mod ast;
-pub mod parser_errors;
+mod ast_printer;
+mod semantic_analysis;
 mod parser;
 
+use parser::parser::*;
+use parser::parser_errors::*;
+
 fn main() {
-    let s = "void f(int x) {\n\
-                int x, y, z;\n\
-                string x = 12;\n\
-                while(c) {\n\
-                    if (c) {\n\
-                        printInt(2);\n\
+    let input = "int main() {\n\
+                    int c = readInt();\n\
+                    printInt(c);
+                    c--;\n\
+                    return 0;\n\
+                }\n\
+                int f(int x) {\n\
+                    if (x < 1) {\n\
+                        return 1;\n\
+                    } else { \n\
+                        return f(x - 1) + f(x - 2);\n\
                     }\n\
                 }\n\
-                return;\n\
-             }\n\
-             int main(bool x, string y) {\n\
-                c++;\n\
-                c--;\n\
-                return c;\n\
-             }";
-    match parser::parse_Program(s) {
-        Ok(x) => println!("{:?}", x),
-        Err(err) => match err {
-            lalrpop_util::ParseError::InvalidToken { location } => parser_errors::pretty_invalid(s.to_string(), location),
-            lalrpop_util::ParseError::UnrecognizedToken { token: None, .. } => parser_errors::pretty_eof(),
-            lalrpop_util::ParseError::UnrecognizedToken { token: Some((beg, t, end)), .. } => parser_errors::pretty_unrecognized(s.to_string(), t.1, beg, end),
-            lalrpop_util::ParseError::User { error: (err_type, err, loc) } => parser_errors::pretty_user(s.to_string(), err_type, err, loc),
-            x => println!("{:?}", x),
+                void y() { return; }";
+    match parse_Program(input) {
+        Ok(program) => match semantic_analysis::check(&program) {
+            Ok(_) => println!("Ok"),
+            Err(err) => println!("{}", err),
         },
+        Err(err) => print_error(err, input),
     }
 }

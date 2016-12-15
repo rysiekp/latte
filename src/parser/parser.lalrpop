@@ -1,6 +1,6 @@
 use lalrpop_util::ParseError;
 use std::str::FromStr;
-use parser_errors::ErrorType;
+use parser::parser_errors::ErrorType;
 use ast::*;
 
 grammar;
@@ -42,7 +42,6 @@ Stmt: Stmt = {
     "if" "(" <c: Expr> ")" <i: Block> => Stmt::SIf(*c, i),
     "if" "(" <c: Expr> ")" <i: Block> "else" <e: Block> => Stmt::SIfElse(*c, i, e),
     "while" "(" <c: Expr> ")" <w: Block> => Stmt::SWhile(*c, w),
-    <Predef> ";" => Stmt::SPredef(<>),
     <Expr> ";" => Stmt::SExpr(*<>),
 };
 
@@ -56,8 +55,8 @@ Block: Block = {
 };
 
 Predef: Predef = {
-    "printInt" "(" <Expr> ")" => Predef::PrintInt(*<>),
-    "printString" "(" <Expr> ")" => Predef::PrintString(*<>),
+    "printInt" "(" <Expr> ")" => Predef::PrintInt(<>),
+    "printString" "(" <Expr> ")" => Predef::PrintString(<>),
     "error" "(" ")" => Predef::Error,
     "readInt" "(" ")" => Predef::ReadInt,
     "readString" "(" ")" => Predef::ReadString,
@@ -95,6 +94,7 @@ Expr5: Box<Expr> = {
 };
 
 Expr6: Box<Expr> = {
+    <Predef>  => Box::new(Expr::EPredef(<>)),
     Identifier => Box::new(Expr::EVar(<>)),
     Num => Box::new(Expr::EIntLit(<>)),
     Bool => Box::new(Expr::EBoolLit(<>)),
