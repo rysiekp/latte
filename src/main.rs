@@ -10,9 +10,9 @@ use parser::parser_errors::*;
 
 fn main() {
     let input = "int main() {\n\
-                    int c = readInt();\n\
-                    printInt(c);
-                    c--;\n\
+                    int __c123__ = readInt();\n\
+                    printInt(__c123__);
+                    __c123__--;\n\
                     return 0;\n\
                 }\n\
                 int f(int x) {\n\
