@@ -2,6 +2,7 @@ use std::fmt;
 use ast::Type;
 
 pub type TError<T> = Result<T, ErrStack>;
+pub type RError = Result<(), String>;
 
 pub struct ErrStack {
     err: String,
@@ -44,10 +45,22 @@ impl ErrStack {
         Self::new(format!("invalid parameter count in call to function {}, expected {}, received {}", fun, expected, args))
     }
 
+    pub fn invalid_main_type() -> ErrStack {
+        Self::new(format!("invalid type of the main function"))
+    }
+
+    pub fn missing_main() -> ErrStack {
+        Self::new(format!("main function is missing"))
+    }
+
     pub fn add_to_stack<T: fmt::Display>(mut self, within: &T) -> ErrStack {
         self.stack.push(format!("{}", within));
         self
     }
+}
+
+pub fn missing_return(function: &String) -> String {
+    format!("not all execution paths yield value in function {}", function)
 }
 
 impl fmt::Display for ErrStack {

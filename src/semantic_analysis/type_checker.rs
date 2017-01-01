@@ -1,7 +1,7 @@
 use std::fmt;
 use std::marker;
 use ast::*;
-use semantic_analysis::errors::{TError, ErrStack};
+use semantic_analysis::errors::{TError, RError, ErrStack, missing_return};
 use semantic_analysis::type_context::{TCContext};
 
 pub fn check(program: &Program) -> TError<()> {
@@ -14,6 +14,42 @@ trait TypeCheck<T> where Self: fmt::Display + marker::Sized {
     }
 
     fn do_check(&self, context: &mut TCContext) -> TError<T>;
+}
+
+trait Returns {
+    fn check_return(&self) -> bool;
+}
+
+impl Returns for Block {
+    fn check_return(&self) -> bool {
+        self.0.iter().any(Stmt::check_return)
+    }
+}
+
+impl Returns for Stmt {
+    fn check_return(&self) -> bool {
+        match *self {
+            Stmt::SVRet |
+            Stmt::SRet(_) => true,
+            Stmt::SIfElse(_, ref b1, ref b2) => b1.check_return() && b2.check_return(),
+            Stmt::SWhile(_, ref b) |
+            Stmt::SIf(_, ref b) => b.check_return(),
+            _ => false
+        }
+    }
+}
+
+pub fn check_return(program: &Program) -> RError {
+    for def in &program.0 {
+        match *def {
+            Def::DFun(ref t, ref name, _, ref body) =>
+                if !(t.clone() == Type::TVoid) && !body.check_return() {
+                    return Err(missing_return(name));
+                }
+        }
+    }
+
+    Ok(())
 }
 
 impl TypeCheck<()> for Program {
@@ -35,7 +71,19 @@ impl TypeCheck<()> for Program {
             };
         }
 
-        Ok(())
+        check_main_exists(context)
+    }
+}
+
+fn check_main_exists(context: &mut TCContext) -> TError<()> {
+    if let Ok(main_type) = context.get(&String::from("main")) {
+        if main_type == Type::TFunc(Box::new(Type::TInt), vec![]) {
+            Ok(())
+        } else {
+            Err(ErrStack::invalid_main_type())
+        }
+    } else {
+        Err(ErrStack::missing_main())
     }
 }
 
