@@ -4,9 +4,12 @@ pub mod ast;
 mod ast_printer;
 mod semantic_analysis;
 mod parser;
+mod code_generation;
 
 use parser::parser::*;
 use parser::parser_errors::*;
+use std::fs::File;
+use ast::*;
 
 fn main() {
     let input = "int main() {\n\
@@ -30,4 +33,10 @@ fn main() {
         },
         Err(err) => print_error(err, input),
     }
+
+    let filename = "test.bc";
+    let mut output = File::create(filename).unwrap();
+    let op = Expr::EOp(Box::new(Expr::EIntLit(12)), BinOp::Sub, Box::new(Expr::EIntLit(15)));
+//    code_generation::run(&mut output, &Stmt::SDecl(Type::TInt, vec![Item::NoInit(String::from("x")), Item::Init(String::from("X"), op)]));
+    code_generation::run(&mut output, &Stmt::SIf(Expr::EBoolLit(true), Block(vec![Stmt::SVRet])));
 }

@@ -32,7 +32,16 @@ pub enum Item {
     Init(String, Expr),
 }
 
-#[derive(Debug)]
+impl Item {
+    pub fn get_id(&self) -> String {
+        match *self {
+            Item::NoInit(ref id) => id.clone(),
+            Item::Init(ref id, _) => id.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Expr {
     EVar(String),
     EIntLit(i32),
@@ -45,13 +54,23 @@ pub enum Expr {
     EOp(Box<Expr>, BinOp, Box<Expr>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Predef {
     PrintInt(Box<Expr>),
     PrintString(Box<Expr>),
     Error,
     ReadInt,
     ReadString,
+}
+
+impl Predef {
+    pub fn get_type(&self) -> Type {
+        match *self {
+            Predef::ReadInt => Type::TInt,
+            Predef::ReadString => Type::TString,
+            _ => Type::TVoid,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -77,6 +96,15 @@ pub enum Type {
     TBool,
     TVoid,
     TFunc(Box<Type>, Vec<Type>)
+}
+
+impl Type {
+    pub fn get_return_type(&self) -> Type {
+        match *self {
+            Type::TFunc(ref t, _) => *t.clone(),
+            _ => unimplemented!()
+        }
+    }
 }
 
 

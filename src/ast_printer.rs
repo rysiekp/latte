@@ -166,9 +166,9 @@ impl Display for Arg {
 impl fmt::Display for Type {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let s = match *self {
-            Type::TInt => "int",
+            Type::TInt => "i32",
             Type::TString => "string",
-            Type::TBool => "bool",
+            Type::TBool => "i1",
             Type::TVoid => "void",
             _ => "function",
         };
