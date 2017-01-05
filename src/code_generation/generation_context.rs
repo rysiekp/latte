@@ -34,7 +34,7 @@ impl Display for Val {
             Val::IConst(x) => write!(f, "{}", x),
             Val::SConst(ref x) => write!(f, "{}", x),
             Val::BConst(x) => write!(f, "{}", x),
-            Val::Register(x) => write!(f, "%{}", x),
+            Val::Register(x) => write!(f, "%V{}", x),
             Val::Label(x) => write!(f, "%L{}", x),
         }
     }
@@ -47,6 +47,7 @@ pub struct CGContext {
     types: Types,
     register: i32,
     label: i32,
+    current_fun: i32,
 }
 
 impl CGContext {
@@ -57,6 +58,7 @@ impl CGContext {
             register: 1,
             label: 1,
             output: vec![],
+            current_fun: 1,
         }
     }
 
@@ -75,6 +77,14 @@ impl CGContext {
         reg
     }
 
+    pub fn switch_reg(&mut self, id: &String, reg: &Val) {
+        self.vars.insert(id.clone(), reg.unwrap_register());
+    }
+
+    pub fn add_function(&mut self, id: &String, t: &Type) {
+        self.types.insert(id.clone(), t.clone());
+    }
+
     pub fn next_register(&mut self) -> Val {
         self.register = self.register + 1;
         Val::Register(self.register - 1)
@@ -89,7 +99,7 @@ impl CGContext {
         self.output.push(code);
     }
 
-    pub fn add_label(&mut self, label: Val) {
+    pub fn add_label(&mut self, label: &Val) {
         self.output.push(format!("L{}:", label.unwrap_register()));
     }
 
@@ -98,5 +108,30 @@ impl CGContext {
             file.write_fmt(format_args!("{}\n", line))?
         }
         Ok(())
+    }
+
+    pub fn in_new_scope<T, F>(&mut self, fun: F) -> T
+        where F: Fn(&mut CGContext) -> T {
+        let old_vars = self.vars.clone();
+        let old_types = self.types.clone();
+        let res = fun(self);
+        self.vars = old_vars;
+        self.types = old_types;
+        res
+    }
+
+    pub fn in_new_function_scope<T, F>(&mut self, fun: F) -> T
+        where F: Fn(&mut CGContext) -> T {
+        let old_vars = self.vars.clone();
+        let old_types = self.types.clone();
+        self.next_fun();
+        let res = fun(self);
+        self.vars = old_vars;
+        self.types = old_types;
+        res
+    }
+
+    fn next_fun(&mut self) {
+        self.current_fun = self.current_fun + 1;
     }
 }

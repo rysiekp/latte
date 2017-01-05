@@ -9,34 +9,34 @@ mod code_generation;
 use parser::parser::*;
 use parser::parser_errors::*;
 use std::fs::File;
-use ast::*;
 
 fn main() {
-    let input = "int main() {\n\
-                    int __c123__ = readInt();\n\
-                    printInt(__c123__);
-                    __c123__--;\n\
-                    return 0;\n\
-                }\n\
-                int f(int x) {\n\
-                    if (x < 1) {\n\
-                        return 1;\n\
-                    } else { \n\
-                        return f(x - 1) + f(x - 2);\n\
-                    }\n\
-                }\n\
-                void y() { return; }";
+    let input = "int f(int x, bool y) {\
+                    int z = x + 1;\
+                    if (y) {\
+                        z = 0;\
+                    }\
+                    \
+                    return z;\
+                }\
+                bool g(int x, bool y) {\
+                    bool z = true;\
+                    if (y) {\
+                        z = false;\
+                    }\
+                    \
+                    return z;\
+                }\
+                int main() {\
+                    return 0;\
+                }";
+    let filename = "test.bc";
+    let mut output = File::create(filename).unwrap();
     match parse_Program(input) {
         Ok(program) => match semantic_analysis::check(&program) {
-            Ok(_) => println!("Ok"),
+            Ok(_) => code_generation::run(&mut output, &program),
             Err(err) => println!("{}", err),
         },
         Err(err) => print_error(err, input),
     }
-
-    let filename = "test.bc";
-    let mut output = File::create(filename).unwrap();
-    let op = Expr::EOp(Box::new(Expr::EIntLit(12)), BinOp::Sub, Box::new(Expr::EIntLit(15)));
-//    code_generation::run(&mut output, &Stmt::SDecl(Type::TInt, vec![Item::NoInit(String::from("x")), Item::Init(String::from("X"), op)]));
-    code_generation::run(&mut output, &Stmt::SIf(Expr::EBoolLit(true), Block(vec![Stmt::SVRet])));
 }

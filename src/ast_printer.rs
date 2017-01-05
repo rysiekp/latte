@@ -44,30 +44,16 @@ impl Print for Def {
     fn print(&self, indent: &String, fmt: &mut fmt::Formatter) {
         match *self {
             Def::DFun(ref t, ref f, ref args, ref block) => {
-                writeln!(fmt, "{}{} {}({})", indent, t, f, print_list(&args)).unwrap();
-                block.print(indent, fmt);
+                write!(fmt, "{}{} {}({})", indent, t, f, print_list(&args)).unwrap();
+                writeln!(fmt, " {}", '{').unwrap();
+                block.print(&format!("\t{}", indent), fmt);
+                writeln!(fmt, "{}", '}').unwrap();
             }
         }
     }
 }
 
 impl fmt::Display for Def {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        self.print_first(fmt);
-        Ok(())
-    }
-}
-
-impl Print for Block {
-    fn print(&self, indent: &String, fmt: &mut fmt::Formatter) {
-        writeln!(fmt, "{}{}", indent, '{').unwrap();
-        let Block(ref stmts) = *self;
-        stmts.print(&format!("\t{}", indent), fmt);
-        writeln!(fmt, "{}{}", indent, '}').unwrap();
-    }
-}
-
-impl fmt::Display for Block {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         self.print_first(fmt);
         Ok(())
@@ -99,6 +85,12 @@ impl Print for Stmt {
             },
             Stmt::SVRet => writeln!(fmt, "return;").unwrap(),
             Stmt::SRet(ref expr) => writeln!(fmt, "return {};", *expr).unwrap(),
+            Stmt::SBlock(ref stmts) => {
+                writeln!(fmt, "{}", '{').unwrap();
+                stmts.print(&format!("\t{}", indent), fmt);
+                writeln!(fmt, "{}{}", indent, '}').unwrap();
+            },
+            Stmt::Empty => writeln!(fmt, ";").unwrap(),
         };
     }
 }
@@ -166,9 +158,9 @@ impl Display for Arg {
 impl fmt::Display for Type {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let s = match *self {
-            Type::TInt => "i32",
+            Type::TInt => "int",
             Type::TString => "string",
-            Type::TBool => "i1",
+            Type::TBool => "bool",
             Type::TVoid => "void",
             _ => "function",
         };
@@ -182,6 +174,7 @@ impl fmt::Display for BinOp {
             BinOp::Add => "+",
             BinOp::Sub => "-",
             BinOp::Mul => "*",
+            BinOp::Mod => "%",
             BinOp::Div => "/",
             BinOp::LT => "<",
             BinOp::GT => ">",

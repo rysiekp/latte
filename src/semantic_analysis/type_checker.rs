@@ -20,22 +20,21 @@ trait Returns {
     fn check_return(&self) -> bool;
 }
 
-impl Returns for Block {
-    fn check_return(&self) -> bool {
-        self.0.iter().any(Stmt::check_return)
-    }
-}
-
 impl Returns for Stmt {
     fn check_return(&self) -> bool {
         match *self {
             Stmt::SVRet |
             Stmt::SRet(_) => true,
             Stmt::SIfElse(_, ref b1, ref b2) => b1.check_return() && b2.check_return(),
-            Stmt::SWhile(_, ref b) |
-            Stmt::SIf(_, ref b) => b.check_return(),
+            Stmt::SBlock(ref stmts) => stmts.check_return(),
             _ => false
         }
+    }
+}
+
+impl Returns for Vec<Stmt> {
+    fn check_return(&self) -> bool {
+        self.iter().any(Stmt::check_return)
     }
 }
 
@@ -43,12 +42,11 @@ pub fn check_return(program: &Program) -> RError {
     for def in &program.0 {
         match *def {
             Def::DFun(ref t, ref name, _, ref body) =>
-                if !(t.clone() == Type::TVoid) && !body.check_return() {
+                if t != &Type::TVoid && !body.check_return() {
                     return Err(missing_return(name));
                 }
         }
     }
-
     Ok(())
 }
 
@@ -94,7 +92,10 @@ impl TypeCheck<()> for Def {
                 for arg in args {
                     context.add(&arg.1, &arg.0)?;
                 }
-                block.do_check(context)
+                for stmt in block {
+                    stmt.check(context)?;
+                }
+                Ok(())
             }
         }
     }
@@ -129,7 +130,7 @@ impl TypeCheck<()> for Stmt {
                 expect(context.get(var)?, Type::TInt)?;
             },
             Stmt::SIf(ref cond, ref block) |
-             Stmt::SWhile(ref cond, ref block) => {
+            Stmt::SWhile(ref cond, ref block) => {
                 expect(cond.check(context)?, Type::TBool)?;
                 context.in_new_scope(|mut ctx| block.do_check(&mut ctx))?;
             },
@@ -144,6 +145,15 @@ impl TypeCheck<()> for Stmt {
             Stmt::SRet(ref expr) => {
                 expect(expr.check(context)?, context.return_type())?;
             },
+            Stmt::SBlock(ref stmts) => {
+                context.in_new_scope(|mut ctx| {
+                    for stmt in stmts {
+                        stmt.check(ctx)?;
+                    };
+                    Ok(())
+                })?;
+            },
+            Stmt::Empty => (),
         };
         Ok(())
     }
@@ -156,16 +166,6 @@ fn check_decl(item: &Item, decl_type: &Type, context: &mut TCContext) -> TError<
             expect(expr.check(context)?, decl_type.clone())?;
             context.add(var, decl_type)
         }
-    }
-}
-
-impl TypeCheck<()> for Block {
-    fn do_check(&self, context: &mut TCContext) -> TError<()> {
-        let Block(ref stmts) = *self;
-        for stmt in stmts {
-            stmt.check(context)?;
-        }
-        Ok(())
     }
 }
 
@@ -184,7 +184,8 @@ impl TypeCheck<Type> for Expr {
                 match op {
                     BinOp::Sub |
                     BinOp::Mul |
-                    BinOp::Div =>
+                    BinOp::Div |
+                    BinOp::Mod =>
                         expect(lhs_type, Type::TInt).and(expect(rhs_type, Type::TInt)),
                     BinOp::GE |
                     BinOp::GT |
@@ -197,8 +198,10 @@ impl TypeCheck<Type> for Expr {
                         expect_one_of(lhs_type, rhs_type, vec![Type::TInt, Type::TString]),
                     BinOp::And | BinOp::Or =>
                         expect(lhs_type, Type::TBool).and(expect(rhs_type, Type::TBool)),
-                    BinOp::EQ | BinOp::NEQ =>
-                        expect_one_of(lhs_type, rhs_type, vec![Type::TInt, Type::TString, Type::TBool]),
+                    BinOp::EQ | BinOp::NEQ => {
+                        expect_one_of(lhs_type, rhs_type, vec![Type::TInt, Type::TString, Type::TBool])?;
+                        Ok(Type::TBool)
+                    },
                 }
             },
             Expr::EPredef(ref predef) => predef.do_check(context),

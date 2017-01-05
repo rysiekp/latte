@@ -3,27 +3,26 @@ pub struct Program(pub Vec<Def>);
 
 #[derive(Debug)]
 pub enum Def {
-    DFun(Type, String, Vec<Arg>, Block),
+    DFun(Type, String, Vec<Arg>, Vec<Stmt>),
 }
 
 #[derive(Debug)]
 pub struct Arg(pub Type, pub String);
 
 #[derive(Debug)]
-pub struct Block(pub Vec<Stmt>);
-
-#[derive(Debug)]
 pub enum Stmt {
+    Empty,
     SDecl(Type, Vec<Item>),
     SAss(String, Expr),
     SInc(String),
     SDecr(String),
     SRet(Expr),
     SVRet,
-    SIf(Expr, Block),
-    SIfElse(Expr, Block, Block),
-    SWhile(Expr, Block),
+    SIf(Expr, Box<Stmt>),
+    SIfElse(Expr, Box<Stmt>, Box<Stmt>),
+    SWhile(Expr, Box<Stmt>),
     SExpr(Expr),
+    SBlock(Vec<Stmt>),
 }
 
 #[derive(Debug)]
@@ -79,6 +78,7 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    Mod,
     LT,
     LE,
     EQ,

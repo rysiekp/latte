@@ -14,7 +14,7 @@ pub Program: Program = {
 };
 
 Def: Def = {
-    <Type> <Identifier> "(" <List<Arg, ",">> ")" <Block> => Def::DFun(<>),
+    <Type> <Identifier> "(" <List<Arg, ",">> ")" "{" <Stmt*> "}" => Def::DFun(<>),
 };
 
 List<T, Sep>: Vec<T> = {
@@ -32,17 +32,28 @@ Arg: Arg = {
     Type Identifier => Arg(<>),
 };
 
-Stmt: Stmt = {
+pub Stmt: Stmt = {
+    OpenStmt => <>,
+    ClosedStmt => <>,
+};
+
+OpenStmt: Stmt = {
+    "while" "(" <c: Expr> ")" <w: Stmt> => Stmt::SWhile(*c, Box::new(w)),
+    "if" "(" <c: Expr> ")" <i: Stmt> => Stmt::SIf(*c, Box::new(i)),
+    "if" "(" <c: Expr> ")" <i: ClosedStmt> "else" <e: OpenStmt> => Stmt::SIfElse(*c, Box::new(i), Box::new(e)),
+};
+
+ClosedStmt: Stmt = {
+    ";" => Stmt::Empty,
     <Type> <List<Item, ","> >";" => Stmt::SDecl(<>),
     <i: Identifier> "=" <e: Expr> ";" => Stmt::SAss(i, *e),
     <Identifier> "++" ";" => Stmt::SInc(<>),
     <Identifier> "--" ";" => Stmt::SDecr(<>),
     "return" <Expr> ";" => Stmt::SRet(*<>),
     "return" ";" => Stmt::SVRet,
-    "if" "(" <c: Expr> ")" <i: Block> => Stmt::SIf(*c, i),
-    "if" "(" <c: Expr> ")" <i: Block> "else" <e: Block> => Stmt::SIfElse(*c, i, e),
-    "while" "(" <c: Expr> ")" <w: Block> => Stmt::SWhile(*c, w),
     <Expr> ";" => Stmt::SExpr(*<>),
+    "{" <Stmt*> "}" => Stmt::SBlock(<>),
+     "if" "(" <c: Expr> ")" <i: ClosedStmt> "else" <e: ClosedStmt> => Stmt::SIfElse(*c, Box::new(i), Box::new(e)),
 };
 
 Item: Item = {
@@ -50,9 +61,11 @@ Item: Item = {
     <Identifier> => Item::NoInit(<>),
 };
 
-Block: Block = {
-    "{" <Stmt*> "}" => Block(<>),
-};
+
+//Block: Block = {
+//    "{" <Stmt*> "}" => Block(<>),
+//};
+
 
 Predef: Predef = {
     "printInt" "(" <Expr> ")" => Predef::PrintInt(<>),
@@ -121,6 +134,7 @@ AddOp: BinOp = {
 MulOp: BinOp = {
     "*" => BinOp::Mul,
     "/" => BinOp::Div,
+    "%" => BinOp::Mod,
 };
 
 
