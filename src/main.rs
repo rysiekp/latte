@@ -6,37 +6,40 @@ mod semantic_analysis;
 mod parser;
 mod code_generation;
 
-use parser::parser::*;
-use parser::parser_errors::*;
 use std::fs::File;
 
 fn main() {
-    let input = "int f(int x, bool y) {\
-                    int z = x + 1;\
-                    if (y) {\
-                        z = 0;\
-                    }\
-                    \
-                    return z;\
-                }\
-                bool g(int x, bool y) {\
-                    bool z = true;\
-                    if (y) {\
-                        z = false;\
-                    }\
-                    \
-                    return z;\
-                }\
-                int main() {\
-                    return 0;\
+    let input = "\
+                /* asdasdasdasd\n\
+                asdasdasdasd */\n\
+                // asdasdasdasd\n\
+                int f(int x, bool y) {\n\
+                    int z = x + 1;\n\
+                    if (y) {\n\
+                        z = 0;\n\
+                    }\n\
+                    \n
+                    return z;\n
+                }\n\
+                bool g(int x, bool y) {\n
+                    bool z = true;\n
+                    if (y) {\n
+                        z = false;\n
+                    }\n
+                    \n
+                    return z;\n
+                }\n\
+                int main() {\n
+                    1 + 1;\n
+                    return 0;\n
                 }";
     let filename = "test.bc";
     let mut output = File::create(filename).unwrap();
-    match parse_Program(input) {
-        Ok(program) => match semantic_analysis::check(&program) {
+    match parser::parse(String::from(input)) {
+        Some(program) => match semantic_analysis::check(&program) {
             Ok(_) => code_generation::run(&mut output, &program),
             Err(err) => println!("{}", err),
         },
-        Err(err) => print_error(err, input),
+        None => (),
     }
 }

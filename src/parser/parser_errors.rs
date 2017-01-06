@@ -15,12 +15,12 @@ macro_rules! println_stderr(
     } }
 );
 
-pub fn print_error<'a>(err: Error<'a>, input: &str) {
+pub fn print_error<'a>(err: Error<'a>, input: String) {
     match err {
-        ParseError::InvalidToken { location } => invalid(input.to_string(), location),
+        ParseError::InvalidToken { location } => invalid(input, location),
         ParseError::UnrecognizedToken { token: None, .. } => eof(),
-        ParseError::UnrecognizedToken { token: Some((beg, t, end)), .. } => unrecognized(input.to_string(), t.1, beg, end),
-        ParseError::User { error: (err_type, err, loc) } => user(input.to_string(), err_type, err, loc),
+        ParseError::UnrecognizedToken { token: Some((beg, t, end)), .. } => unrecognized(input, t.1, beg, end),
+        ParseError::User { error: (err_type, err, loc) } => user(input, err_type, err, loc),
         x => println!("{:?}", x),
     }
 }

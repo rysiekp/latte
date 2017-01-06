@@ -1,4 +1,4 @@
-use code_generation::generation_context::{CGContext, Val};
+use code_generation::generation_context::{CGContext, Val, Register};
 use std::fs::File;
 use ast::*;
 
@@ -41,8 +41,10 @@ impl Generator<()> for Def {
                 }
                 code = format!("{}) {}", code, '{');
                 context.add_code(code);
+                context.add_fun_prologue(ret_type);
                 args.iter().map(|arg| generate_local_var(context, arg)).collect::<Vec<()>>();
                 stmts.iter().map(|stmt| stmt.generate(context)).collect::<Vec<()>>();
+                context.add_fun_epilogue(ret_type);
                 context.add_code(String::from("}"));
             }
         }
@@ -61,8 +63,8 @@ fn generate_local_var(context: &mut CGContext, arg: &Arg) {
     let Arg(ref arg_type, ref id) = *arg;
     let val_reg = context.get_register(id);
     let addr_reg = generate_assign(context, format!("alloca {}", arg_type.to_llvm()));
-    context.switch_reg(id, &addr_reg);
-    store_var(id, &val_reg, &arg_type.to_llvm(), context);
+    context.switch_reg(id, addr_reg);
+    store_var(id, &Val::Register(val_reg), &arg_type.to_llvm(), context);
 }
 
 impl Generator<()> for Stmt {
@@ -82,11 +84,17 @@ impl Generator<()> for Stmt {
             Stmt::SExpr(ref expr) => {
                 expr.generate(context);
             },
-            Stmt::SVRet => context.add_code(format!("ret void")),
+            Stmt::SVRet => {
+                let ret_label = context.current_func_ret_label();
+                context.add_code(format!("br label {}", ret_label))
+            },
             Stmt::SRet(ref expr) => {
+                let ret_addr = context.current_func_ret_addr();
                 let val = expr.generate(context);
                 let val_type = expr.get_type(context).to_llvm();
-                context.add_code(format!("ret {} {}", val_type, val));
+                let ret_label = context.current_func_ret_label();
+                context.add_code(format!("store {} {}, {}* {}", val_type, val, val_type, ret_addr));
+                context.add_code(format!("br label {}", ret_label));
             },
             Stmt::SBlock(ref stmts) => {
                 context.in_new_scope(|mut context|
@@ -133,7 +141,7 @@ impl Generator<()> for Stmt {
     }
 }
 
-fn generate_assign(context: &mut CGContext, rhs: String) -> Val {
+fn generate_assign(context: &mut CGContext, rhs: String) -> Register {
     let reg = context.next_register();
     context.add_code(format!("{} = {}", reg, rhs));
     reg
@@ -143,13 +151,13 @@ fn manipulate_variable(var: &String, operation: String, context: &mut CGContext)
     let ptr = read_var(var, context);
     let var_type = context.get_type(var).to_llvm();
     let val = generate_assign(context, format!("{}, {} {}", operation, var_type, ptr));
-    store_var(var, &val, &var_type, context)
+    store_var(var, &Val::Register(val), &var_type, context)
 }
 
 fn read_var(var: &String, context: &mut CGContext) -> Val {
     let var_reg = context.get_register(var);
     let var_type = context.get_type(var).to_llvm();
-    generate_assign(context, format!("load {}, {}* {}", var_type, var_type, var_reg))
+    Val::Register(generate_assign(context, format!("load {}, {}* {}", var_type, var_type, var_reg)))
 }
 
 fn store_var(var: &String, val: &Val, var_type: &String, context: &mut CGContext) -> () {
@@ -166,17 +174,6 @@ fn generate_item(item_type: &Type, item: &Item, context: &mut CGContext) -> () {
     }
 }
 
-impl Stmt {
-    pub fn early_return(&self) -> bool {
-        match *self {
-            Stmt::SVRet | Stmt::SRet(_) => true,
-            Stmt::SWhile(_, ref stmts) => stmts.early_return(),
-            Stmt::SIfElse(_, ref b1, ref b2) => b1.early_return() && b2.early_return(),
-            _ => false,
-        }
-    }
-}
-
 impl Type {
     fn default_value(&self) -> Expr {
         match *self {
@@ -187,7 +184,7 @@ impl Type {
         }
     }
 
-    fn to_llvm(&self) -> String {
+    pub fn to_llvm(&self) -> String {
         String::from(match *self {
             Type::TInt => "i32",
             Type::TBool => "i1",
@@ -211,18 +208,18 @@ impl Generator<Val> for Expr {
             Expr::EVar(ref id) => read_var(id, context),
             Expr::ENeg(ref expr) => {
                 let e = expr.generate(context);
-                generate_assign(context, format!("sub i32 0, {}", e))
+                Val::Register(generate_assign(context, format!("sub i32 0, {}", e)))
             },
             Expr::ENot(ref expr) => {
                 let e = expr.generate(context);
-                generate_assign(context, format!("sub i1 1, {}", e))
+                Val::Register(generate_assign(context, format!("sub i1 1, {}", e)))
             },
             Expr::EOp(ref lhs, ref op, ref rhs) => {
                 let rhs = rhs.generate(context);
                 let lhs = lhs.generate(context);
                 let op = op.generate(context);
                 let types = self.get_type(context).to_llvm();
-                generate_assign(context, format!("{} {} {}, {} ", op, types, lhs, rhs))
+                Val::Register(generate_assign(context, format!("{} {} {}, {} ", op, types, lhs, rhs)))
             },
             Expr::EApp(ref s, ref args) => {
                 let llvm_args = args_to_llvm(args, context);
@@ -236,7 +233,7 @@ impl Generator<Val> for Expr {
                     call = format!("{}{} {}", call, arg_type, val);
                 }
                 context.add_code(format!("{})", call));
-                res
+                Val::Register(res)
             },
             _ => unimplemented!()
         }

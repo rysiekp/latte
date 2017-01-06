@@ -5,8 +5,9 @@ use std::fmt::Display;
 use std::io;
 use std::io::Write;
 use ast::Type;
+use std::ops::Deref;
 
-type Vars = HashMap<String, i32>;
+type Vars = HashMap<String, Register>;
 type Types = HashMap<String, Type>;
 
 #[derive(Clone)]
@@ -14,16 +15,36 @@ pub enum Val {
     IConst(i32),
     SConst(String),
     BConst(i8),
-    Register(i32),
-    Label(i32),
+    Register(Register),
 }
 
-impl Val {
-    pub fn unwrap_register(&self) -> i32 {
+#[derive(Clone, Copy, Debug)]
+pub enum Register {
+    Var(i32),
+    Label(i32),
+    FuncRet(i32),
+    RetVal(i32),
+    RetAddr(i32),
+}
+
+impl Register {
+    pub fn unwrap(&self) -> i32 {
         match *self {
-            Val::Register(x) |
-            Val::Label(x) => x,
-            _ => unreachable!(),
+            Register::Var(x) |
+            Register::Label(x) |
+            Register::FuncRet(x) |
+            Register::RetVal(x) |
+            Register::RetAddr(x) => x,
+        }
+    }
+
+    pub fn next(&self) -> Self {
+        match *self {
+            Register::Var(x) => Register::Var(x + 1),
+            Register::Label(x) => Register::Label(x + 1),
+            Register::FuncRet(x) => Register::FuncRet(x + 1),
+            Register::RetVal(x) => Register::RetVal(x + 1),
+            Register::RetAddr(x) => Register::RetAddr(x + 1),
         }
     }
 }
@@ -31,11 +52,22 @@ impl Val {
 impl Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Val::IConst(x) => write!(f, "{}", x),
+            Val::IConst(ref x) => write!(f, "{}", x),
             Val::SConst(ref x) => write!(f, "{}", x),
-            Val::BConst(x) => write!(f, "{}", x),
-            Val::Register(x) => write!(f, "%V{}", x),
-            Val::Label(x) => write!(f, "%L{}", x),
+            Val::BConst(ref x) => write!(f, "{}", x),
+            Val::Register(r) => write!(f, "{}", r),
+        }
+    }
+}
+
+impl Display for Register {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Register::Var(x) => write!(f, "%v{}", x),
+            Register::Label(x) => write!(f, "%L{}", x),
+            Register::FuncRet(x) => write!(f, "%FR{}", x),
+            Register::RetVal(x) => write!(f, "%rv{}", x),
+            Register::RetAddr(x) => write!(f, "%ra{}", x),
         }
     }
 }
@@ -45,8 +77,8 @@ pub struct CGContext {
     output: Vec<String>,
     vars: Vars,
     types: Types,
-    register: i32,
-    label: i32,
+    register: Register,
+    label: Register,
     current_fun: i32,
 }
 
@@ -55,52 +87,87 @@ impl CGContext {
         CGContext {
             vars: Vars::new(),
             types: Types::new(),
-            register: 1,
-            label: 1,
+            register: Register::Var(1),
+            label: Register::Label(1),
             output: vec![],
             current_fun: 1,
         }
     }
 
-    pub fn get_register(&self, id: &String) -> Val {
-        Val::Register(self.vars.get(id).unwrap().clone())
+    pub fn get_register(&self, id: &String) -> Register {
+        *(self.vars.get(id).unwrap())
     }
 
     pub fn get_type(&self, id: &String) -> Type {
         self.types.get(id).unwrap().clone()
     }
 
-    pub fn add(&mut self, id: &String, t: &Type) -> Val {
+    pub fn add(&mut self, id: &String, t: &Type) -> Register {
         let reg = self.next_register();
-        self.vars.insert(id.clone(), reg.unwrap_register());
+        self.vars.insert(id.clone(), reg);
         self.types.insert(id.clone(), t.clone());
         reg
     }
 
-    pub fn switch_reg(&mut self, id: &String, reg: &Val) {
-        self.vars.insert(id.clone(), reg.unwrap_register());
+    pub fn switch_reg(&mut self, id: &String, reg: Register) {
+        self.vars.insert(id.clone(), reg);
     }
 
     pub fn add_function(&mut self, id: &String, t: &Type) {
         self.types.insert(id.clone(), t.clone());
     }
 
-    pub fn next_register(&mut self) -> Val {
-        self.register = self.register + 1;
-        Val::Register(self.register - 1)
+    pub fn next_register(&mut self) -> Register {
+        let res = self.register;
+        self.register = self.register.next();
+        res
     }
 
-    pub fn next_label(&mut self) -> Val {
-        self.label = self.label + 1;
-        Val::Label(self.label - 1)
+    pub fn next_label(&mut self) -> Register {
+        let res = self.label;
+        self.label = self.label.next();
+        res
     }
 
     pub fn add_code(&mut self, code: String) {
         self.output.push(code);
     }
 
-    pub fn add_label(&mut self, label: &Val) {
-        self.output.push(format!("L{}:", label.unwrap_register()));
+    pub fn add_label(&mut self, label: &Register) {
+        self.add_code(format!("L{}:", label.unwrap()));
+    }
+
+    pub fn add_fun_prologue(&mut self, func_type: &Type) {
+        let current_fun = self.current_fun;
+        match func_type {
+            &Type::TVoid => (),
+            _ => self.add_code(format!("{} = alloca {}", Register::RetAddr(current_fun), func_type.to_llvm()))
+        }
+    }
+
+    pub fn add_fun_epilogue(&mut self, func_type: &Type) {
+        let current_fun = self.current_fun;
+        self.add_code(format!("br label {}", Register::FuncRet(current_fun)));
+        self.add_code(format!("FR{}:", current_fun));
+        match func_type {
+            &Type::TVoid => self.add_code(format!("ret void")),
+            _ => {
+                self.add_code(format!("{} = load {}, {}* {}",
+                                      Register::RetVal(current_fun),
+                                      func_type.to_llvm(),
+                                      func_type.to_llvm(),
+                                      Register::RetAddr(current_fun)));
+                self.add_code(format!("ret {} {}", func_type.to_llvm(), Register::RetVal(current_fun)));
+            }
+        }
+    }
+
+    pub fn current_func_ret_addr(&self) -> Register {
+        Register::RetAddr(self.current_fun)
+    }
+
+    pub fn current_func_ret_label(&self) -> Register {
+        Register::FuncRet(self.current_fun)
     }
 
     pub fn write(self, file: &mut File) -> io::Result<()> {
