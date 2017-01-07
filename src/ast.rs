@@ -98,13 +98,4 @@ pub enum Type {
     TFunc(Box<Type>, Vec<Type>)
 }
 
-impl Type {
-    pub fn get_return_type(&self) -> Type {
-        match *self {
-            Type::TFunc(ref t, _) => *t.clone(),
-            _ => unimplemented!()
-        }
-    }
-}
-
 

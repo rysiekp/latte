@@ -5,7 +5,6 @@ use std::fmt::Display;
 use std::io;
 use std::io::Write;
 use ast::Type;
-use std::ops::Deref;
 
 type Vars = HashMap<String, Register>;
 type Types = HashMap<String, Type>;

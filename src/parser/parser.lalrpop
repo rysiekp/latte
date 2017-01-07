@@ -137,7 +137,7 @@ MulOp: BinOp = {
 Type: Type = {
     "int" => Type::TInt,
     "string" => Type::TString,
-    "bool" => Type::TBool,
+    "boolean" => Type::TBool,
     "void" => Type::TVoid,
 };
 

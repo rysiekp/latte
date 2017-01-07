@@ -16,6 +16,8 @@ impl Generator<()> for Program {
     fn generate(&self, context: &mut CGContext) -> () {
         let Program(ref defs) = *self;
 
+        context.add_code(format!("declare void @printInt(i32)"));
+
         for def in defs {
             match def {
                 &Def::DFun(ref ret_type, ref name, _, _) => context.add_function(name, ret_type),
@@ -97,10 +99,7 @@ impl Generator<()> for Stmt {
                 context.add_code(format!("br label {}", ret_label));
             },
             Stmt::SBlock(ref stmts) => {
-                context.in_new_scope(|mut context|
-                    for stmt in stmts {
-                        stmt.generate(context);
-                    })
+                context.in_new_scope(|context| stmts.iter().map(|stmt| stmt.generate(context)).collect::<Vec<()>>());
             }
             Stmt::SIf(ref expr, ref block) => {
                 let expr_val = expr.generate(context);
@@ -127,13 +126,16 @@ impl Generator<()> for Stmt {
                 context.add_label(&after_label);
             },
             Stmt::SWhile(ref expr, ref block) => {
-                let expr_val = expr.generate(context);
+                let while_label = context.next_label();
                 let body_label = context.next_label();
                 let after_label = context.next_label();
+                context.add_code(format!("br label {}", while_label));
+                context.add_label(&while_label);
+                let expr_val = expr.generate(context);
                 context.add_code(format!("br i1 {}, label {}, label {}", expr_val, body_label, after_label));
                 context.add_label(&body_label);
                 context.in_new_scope(|mut context| block.generate(context));
-                context.add_code(format!("br label {}", body_label));
+                context.add_code(format!("br label {}", while_label));
                 context.add_label(&after_label);
             },
             Stmt::Empty => (),
@@ -150,7 +152,7 @@ fn generate_assign(context: &mut CGContext, rhs: String) -> Register {
 fn manipulate_variable(var: &String, operation: String, context: &mut CGContext) -> () {
     let ptr = read_var(var, context);
     let var_type = context.get_type(var).to_llvm();
-    let val = generate_assign(context, format!("{}, {} {}", operation, var_type, ptr));
+    let val = generate_assign(context, format!("{}, {}", operation, ptr));
     store_var(var, &Val::Register(val), &var_type, context)
 }
 
@@ -214,31 +216,125 @@ impl Generator<Val> for Expr {
                 let e = expr.generate(context);
                 Val::Register(generate_assign(context, format!("sub i1 1, {}", e)))
             },
-            Expr::EOp(ref lhs, ref op, ref rhs) => {
-                let rhs = rhs.generate(context);
-                let lhs = lhs.generate(context);
-                let op = op.generate(context);
-                let types = self.get_type(context).to_llvm();
-                Val::Register(generate_assign(context, format!("{} {} {}, {} ", op, types, lhs, rhs)))
-            },
+            Expr::EOp(ref lhs, ref op, ref rhs) => Val::Register(generate_op(lhs, op, rhs, context)),
             Expr::EApp(ref s, ref args) => {
                 let llvm_args = args_to_llvm(args, context);
-                let ret_type = context.get_type(s).get_return_type().to_llvm();
+                let ret_type = context.get_type(s);
                 let res = context.next_register();
-                let mut call = format!("{} = call {} @{}(", res, ret_type, s);
+                let mut call = match ret_type {
+                    Type::TVoid => format!("call {} @{}(", ret_type.to_llvm(), s),
+                    _ => format!("{} = call {} @{}(", res, ret_type.to_llvm(), s),
+
+                };
                 for (i, (val, arg_type)) in llvm_args.into_iter().enumerate() {
                     if i > 0 {
                         call = format!("{}, ", call);
                     }
-                    call = format!("{}{} {}", call, arg_type, val);
+                    call = format!("{}{} {}", call, arg_type.to_llvm(), val);
                 }
                 context.add_code(format!("{})", call));
                 Val::Register(res)
             },
-            _ => unimplemented!()
+            Expr::EPredef(ref predef) => predef.generate(context),
+            Expr::EStringLit(ref s) => unimplemented!()
         }
     }
 }
+
+fn generate_op(lhs: &Expr, op: &BinOp, rhs: &Expr, context: &mut CGContext) -> Register {
+    match *op {
+        BinOp::And => {
+            let lhs_label = context.next_label();
+            let rhs_label = context.next_label();
+            let end_label = context.next_label();
+            context.add_code(format!("br label {}", lhs_label));
+
+            context.add_label(&lhs_label);
+            let lhs = lhs.generate(context);
+            context.add_code(format!("br i1 {}, label {}, label {}", lhs, rhs_label, end_label));
+
+            context.add_label(&rhs_label);
+            let rhs = rhs.generate(context);
+            context.add_code(format!("br label {}", end_label));
+
+            context.add_label(&end_label);
+            generate_assign(context, format!("phi i1 [0, {}], [{}, {}]", lhs_label, rhs, rhs_label))
+        },
+        BinOp::Or => {
+            let lhs_label = context.next_label();
+            let rhs_label = context.next_label();
+            let end_label = context.next_label();
+            context.add_code(format!("br label {}", lhs_label));
+
+            context.add_label(&lhs_label);
+            let lhs = lhs.generate(context);
+            context.add_code(format!("br i1 {}, label {}, label {}", lhs, end_label, rhs_label));
+
+            context.add_label(&rhs_label);
+            let rhs = rhs.generate(context);
+            context.add_code(format!("br label {}", end_label));
+
+            context.add_label(&end_label);
+            generate_assign(context, format!("phi i1 [1, {}], [{}, {}]", lhs_label, rhs, rhs_label))
+        },
+        _ => {
+            let t = lhs.get_type(context).to_llvm();
+            let lhs = lhs.generate(context);
+            let rhs = rhs.generate(context);
+            generate_assign(context, format!("{} {} {}, {}", op.to_llvm(), t, &lhs, &rhs))
+        },
+    }
+}
+
+impl Generator<Val> for Predef {
+    fn generate(&self, context: &mut CGContext) -> Val {
+        match *self {
+            Predef::PrintInt(ref e) => {
+                let arg = e.generate(context);
+                context.add_code(format!("call void @printInt(i32 {})", arg));
+                Val::Register(context.next_register())
+            },
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl BinOp {
+    fn to_llvm(&self) -> String {
+        String::from(match *self {
+            BinOp::Add => "add",
+            BinOp::Sub => "sub",
+            BinOp::Mul => "mul",
+            BinOp::Mod => "srem",
+            BinOp::Div => "sdiv",
+            BinOp::LT => "icmp slt",
+            BinOp::GT => "icmp sgt",
+            BinOp::LE => "icmp sle",
+            BinOp::GE => "icmp sge",
+            BinOp::EQ => "icmp eq",
+            BinOp::NEQ => "icmp ne",
+            _ => unimplemented!(),
+        })
+    }
+
+    pub fn get_type(&self) -> Option<Type> {
+        match *self {
+            BinOp::Sub |
+            BinOp::Mul |
+            BinOp::Div |
+            BinOp::Mod => Some(Type::TInt),
+            BinOp::And |
+            BinOp::NEQ |
+            BinOp::Or |
+            BinOp::GE |
+            BinOp::GT |
+            BinOp::LE |
+            BinOp::LT => Some(Type::TBool),
+            _ => None,
+        }
+    }
+}
+
 
 fn args_to_llvm(args: &Vec<Expr>, context: &mut CGContext) -> Vec<(Val, Type)> {
     let mut llvm_args = vec![];
@@ -255,7 +351,7 @@ impl Expr {
     fn get_type(&self, context: &CGContext) -> Type {
         match *self {
             Expr::EOp(ref lhs, ref op, _) => op.get_type().unwrap_or(lhs.get_type(context)),
-            Expr::EApp(ref id, _) => context.get_type(id).get_return_type(),
+            Expr::EApp(ref id, _) => context.get_type(id),
             Expr::EBoolLit(_) |
             Expr::ENot(_) => Type::TBool,
             Expr::EIntLit(_) |
@@ -263,40 +359,6 @@ impl Expr {
             Expr::EStringLit(_) => Type::TString,
             Expr::EPredef(ref predef) => predef.get_type(),
             Expr::EVar(ref id) => context.get_type(id),
-        }
-    }
-}
-
-impl Generator<String> for BinOp {
-    fn generate(&self, _: &mut CGContext) -> String {
-        match *self {
-            BinOp::Add => String::from("add"),
-            BinOp::Sub => String::from("sub"),
-            BinOp::Mul => String::from("mul"),
-            BinOp::Div => String::from("div"),
-            BinOp::Mod => String::from("urem"),
-            BinOp::And => String::from("and"),
-            BinOp::Or => String::from("or"),
-            _ => unimplemented!()
-        }
-    }
-}
-
-impl BinOp {
-    pub fn get_type(&self) -> Option<Type> {
-        match *self {
-            BinOp::Sub |
-            BinOp::Mul |
-            BinOp::Div |
-            BinOp::Mod => Some(Type::TInt),
-            BinOp::And |
-            BinOp::NEQ |
-            BinOp::Or |
-            BinOp::GE |
-            BinOp::GT |
-            BinOp::LE |
-            BinOp::LT => Some(Type::TBool),
-            _ => None,
         }
     }
 }
