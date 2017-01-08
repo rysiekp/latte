@@ -1,12 +1,15 @@
 pub mod parser;
+#[macro_use]
 pub mod parser_errors;
 
 use ast::Program;
+use std::io::Write;
 
 pub fn parse(s: String) -> Option<Program> {
     match parser::parse_Program(remove_comments(&s).as_str()) {
         Ok(program) => Some(program),
         Err(err) => {
+            println_stderr!("ERROR");
             parser_errors::print_error(err, s);
             None
         },

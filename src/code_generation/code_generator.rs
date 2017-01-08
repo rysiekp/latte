@@ -1,11 +1,12 @@
-use code_generation::generation_context::{CGContext, Val, Register};
+use code_generation::generation_context::{CGContext, Val, Register, Const};
+use semantic_analysis::type_checker::{Returns};
 use std::fs::File;
 use ast::*;
 
 pub fn generate(out: &mut File, p: &Program) {
     let mut context = CGContext::new();
     p.generate(&mut context);
-    context.write(out);
+    context.write(out).expect("Couldn't write to file");
 }
 
 trait Generator<T> {
@@ -13,10 +14,15 @@ trait Generator<T> {
 }
 
 impl Generator<()> for Program {
-    fn generate(&self, context: &mut CGContext) -> () {
+    fn generate(&self, context: &mut CGContext) {
         let Program(ref defs) = *self;
 
         context.add_code(format!("declare void @printInt(i32)"));
+        context.add_code(format!("declare void @printString(i8*)"));
+        context.add_code(format!("declare void @error()"));
+        context.add_code(format!("declare i32 @readInt()"));
+        context.add_code(format!("declare i8* @readString()"));
+        context.add_code(format!("declare i8* @concat(i8*, i8*)"));
 
         for def in defs {
             match def {
@@ -31,7 +37,7 @@ impl Generator<()> for Program {
 }
 
 impl Generator<()> for Def {
-    fn generate(&self, context: &mut CGContext) -> () {
+    fn generate(&self, context: &mut CGContext) {
         match *self {
             Def::DFun(ref ret_type, ref name, ref args, ref stmts) => {
                 let mut code = format!("define {} @{}(", ret_type.to_llvm(), name);
@@ -43,11 +49,23 @@ impl Generator<()> for Def {
                 }
                 code = format!("{}) {}", code, '{');
                 context.add_code(code);
-                context.add_fun_prologue(ret_type);
                 args.iter().map(|arg| generate_local_var(context, arg)).collect::<Vec<()>>();
-                stmts.iter().map(|stmt| stmt.generate(context)).collect::<Vec<()>>();
-                context.add_fun_epilogue(ret_type);
+                stmts.generate(context);
+                if ret_type == &Type::TVoid {
+                    context.add_code(String::from("ret void"));
+                }
                 context.add_code(String::from("}"));
+            }
+        }
+    }
+}
+
+impl Generator<()> for Vec<Stmt> {
+    fn generate(&self, context: &mut CGContext) {
+        for stmt in self {
+            stmt.generate(context);
+            if stmt.check_return(){
+                break;
             }
         }
     }
@@ -70,7 +88,7 @@ fn generate_local_var(context: &mut CGContext, arg: &Arg) {
 }
 
 impl Generator<()> for Stmt {
-    fn generate(&self, context: &mut CGContext) -> () {
+    fn generate(&self, context: &mut CGContext) {
         match *self {
             Stmt::SAss(ref id, ref expr) => {
                 let val = expr.generate(context);
@@ -82,24 +100,18 @@ impl Generator<()> for Stmt {
                     generate_item(item_type, item, context);
                 },
             Stmt::SInc(ref id) => manipulate_variable(id, String::from("add i32 1"), context),
-            Stmt::SDecr(ref id) => manipulate_variable(id, String::from("sub i32 1"), context),
+            Stmt::SDecr(ref id) => manipulate_variable(id, String::from("add i32 -1"), context),
             Stmt::SExpr(ref expr) => {
                 expr.generate(context);
             },
-            Stmt::SVRet => {
-                let ret_label = context.current_func_ret_label();
-                context.add_code(format!("br label {}", ret_label))
-            },
+            Stmt::SVRet => context.add_code(format!("ret void")),
             Stmt::SRet(ref expr) => {
-                let ret_addr = context.current_func_ret_addr();
                 let val = expr.generate(context);
                 let val_type = expr.get_type(context).to_llvm();
-                let ret_label = context.current_func_ret_label();
-                context.add_code(format!("store {} {}, {}* {}", val_type, val, val_type, ret_addr));
-                context.add_code(format!("br label {}", ret_label));
+                context.add_code(format!("ret {} {}", val_type, val));
             },
             Stmt::SBlock(ref stmts) => {
-                context.in_new_scope(|context| stmts.iter().map(|stmt| stmt.generate(context)).collect::<Vec<()>>());
+                context.in_new_scope(|context| stmts.generate(context));
             }
             Stmt::SIf(ref expr, ref block) => {
                 let expr_val = expr.generate(context);
@@ -119,11 +131,17 @@ impl Generator<()> for Stmt {
                 context.add_code(format!("br i1 {}, label {}, label {}", expr_val, if_label, else_label));
                 context.add_label(&if_label);
                 context.in_new_scope(|mut context| block1.generate(context));
-                context.add_code(format!("br label {}", after_label));
+                if !self.check_return(){
+                    context.add_code(format!("br label {}", after_label));
+                }
                 context.add_label(&else_label);
                 context.in_new_scope(|mut context| block2.generate(context));
-                context.add_code(format!("br label {}", after_label));
-                context.add_label(&after_label);
+                if !self.check_return(){
+                    context.add_code(format!("br label {}", after_label));
+                }
+                if !self.check_return() {
+                    context.add_label(&after_label);
+                }
             },
             Stmt::SWhile(ref expr, ref block) => {
                 let while_label = context.next_label();
@@ -149,7 +167,7 @@ fn generate_assign(context: &mut CGContext, rhs: String) -> Register {
     reg
 }
 
-fn manipulate_variable(var: &String, operation: String, context: &mut CGContext) -> () {
+fn manipulate_variable(var: &String, operation: String, context: &mut CGContext) {
     let ptr = read_var(var, context);
     let var_type = context.get_type(var).to_llvm();
     let val = generate_assign(context, format!("{}, {}", operation, ptr));
@@ -162,12 +180,12 @@ fn read_var(var: &String, context: &mut CGContext) -> Val {
     Val::Register(generate_assign(context, format!("load {}, {}* {}", var_type, var_type, var_reg)))
 }
 
-fn store_var(var: &String, val: &Val, var_type: &String, context: &mut CGContext) -> () {
+fn store_var(var: &String, val: &Val, var_type: &String, context: &mut CGContext) {
     let reg = context.get_register(var);
     context.add_code(format!("store {} {}, {}* {}", var_type, val.clone(), var_type, reg))
 }
 
-fn generate_item(item_type: &Type, item: &Item, context: &mut CGContext) -> () {
+fn generate_item(item_type: &Type, item: &Item, context: &mut CGContext) {
     let reg = context.add(&item.get_id(), item_type);
     context.add_code(format!("{} = alloca {}", reg, item_type.to_llvm()));
     match *item {
@@ -201,12 +219,8 @@ impl Type {
 impl Generator<Val> for Expr {
     fn generate(&self, context: &mut CGContext) -> Val {
         match *self {
-            Expr::EIntLit(x) => Val::IConst(x),
-            Expr::EBoolLit(b) =>
-                Val::BConst(match b {
-                    true => 1,
-                    false => 0,
-                }),
+            Expr::EIntLit(x) => Val::Const(Const::IConst(x)),
+            Expr::EBoolLit(b) => Val::Const(Const::BConst(b)),
             Expr::EVar(ref id) => read_var(id, context),
             Expr::ENeg(ref expr) => {
                 let e = expr.generate(context);
@@ -236,7 +250,11 @@ impl Generator<Val> for Expr {
                 Val::Register(res)
             },
             Expr::EPredef(ref predef) => predef.generate(context),
-            Expr::EStringLit(ref s) => unimplemented!()
+            Expr::EStringLit(ref s) => {
+                let c = Val::Const(context.get_const(s));
+                Val::Register(generate_assign(context,
+                                format!("getelementptr [{} x i8], [{} x i8]* {}, i64 0, i64 0", s.len() + 1, s.len() + 1, c)))
+            },
         }
     }
 }
@@ -277,6 +295,15 @@ fn generate_op(lhs: &Expr, op: &BinOp, rhs: &Expr, context: &mut CGContext) -> R
             context.add_label(&end_label);
             generate_assign(context, format!("phi i1 [1, {}], [{}, {}]", lhs_label, rhs, rhs_label))
         },
+        BinOp::Add => {
+            let t = lhs.get_type(context);
+            let lhs = lhs.generate(context);
+            let rhs = rhs.generate(context);
+            match t {
+                Type::TString => generate_assign(context, format!("call i8* @concat(i8* {}, i8* {})", &lhs, &rhs)),
+                _ => generate_assign(context, format!("{} i32 {}, {}", op.to_llvm(), &lhs, &rhs)),
+            }
+        },
         _ => {
             let t = lhs.get_type(context).to_llvm();
             let lhs = lhs.generate(context);
@@ -294,7 +321,17 @@ impl Generator<Val> for Predef {
                 context.add_code(format!("call void @printInt(i32 {})", arg));
                 Val::Register(context.next_register())
             },
-            _ => unimplemented!(),
+            Predef::PrintString(ref e) => {
+                let arg = e.generate(context);
+                context.add_code(format!("call void @printString(i8* {})", arg));
+                Val::Register(context.next_register())
+            },
+            Predef::Error => {
+                context.add_code(format!("call void @error()"));
+                Val::Register(context.next_register())
+            }
+            Predef::ReadInt => Val::Register(generate_assign(context, format!("call i32 @readInt()"))),
+            Predef::ReadString => Val::Register(generate_assign(context, format!("call i8* @readString()"))),
         }
     }
 }

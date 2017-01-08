@@ -160,7 +160,7 @@ impl fmt::Display for Type {
         let s = match *self {
             Type::TInt => "int",
             Type::TString => "string",
-            Type::TBool => "bool",
+            Type::TBool => "boolean",
             Type::TVoid => "void",
             _ => "function",
         };

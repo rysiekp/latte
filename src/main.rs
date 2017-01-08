@@ -3,10 +3,14 @@ extern crate lalrpop_util;
 pub mod ast;
 mod ast_printer;
 mod semantic_analysis;
+#[macro_use]
 mod parser;
 mod code_generation;
+mod optimizer;
 
 use std::fs::File;
+use std::process::exit;
+use std::io::Write;
 use std::process::Command;
 
 fn use_llvm(ll_path: String, bc_path: String) {
@@ -54,9 +58,14 @@ fn main() {
 
                 }\n\
                 int main() {\n\
-                    int x = 5;\n\
-                    printInt(fib1(x));\n\
-                    printInt(fib2(x));\n\
+                    readString();
+                    while (true) {\n\
+                        int x = readInt();\n\
+                        string s = readString();\n\
+                        printString(s + s);\n\
+                        printInt(fib1(x));\n\
+                        printInt(fib2(x));\n\
+                    }\n\
                     return 0;\n\
                 }";
     let filename = "test.ll";
@@ -64,11 +73,16 @@ fn main() {
     match parser::parse(String::from(input)) {
         Some(program) => match semantic_analysis::check(&program) {
             Ok(_) => {
-                code_generation::run(&mut output, &program);
+                code_generation::run(&mut output, &optimizer::optimize(program));
                 use_llvm(String::from("test.ll"), String::from("test.bc"));
+                println!("OK");
             },
-            Err(err) => println!("{}", err),
+            Err(err) => {
+                println_stderr!("ERROR");
+                println_stderr!("{}", err);
+                exit(-1);
+            },
         },
-        None => (),
+        None => exit(-1),
     }
 }

@@ -16,7 +16,7 @@ trait TypeCheck<T> where Self: fmt::Display + marker::Sized {
     fn do_check(&self, context: &mut TCContext) -> TError<T>;
 }
 
-trait Returns {
+pub trait Returns {
     fn check_return(&self) -> bool;
 }
 
@@ -234,8 +234,14 @@ impl TypeCheck<Type> for Predef {
             Predef::Error => Ok(Type::TVoid),
             Predef::ReadInt => Ok(Type::TInt),
             Predef::ReadString => Ok(Type::TString),
-            Predef::PrintInt(ref arg) => expect(arg.check(context)?, Type::TInt),
-            Predef::PrintString(ref arg) => expect(arg.check(context)?, Type::TString),
+            Predef::PrintInt(ref arg) => {
+                expect(arg.check(context)?, Type::TInt)?;
+                Ok(Type::TVoid)
+            },
+            Predef::PrintString(ref arg) => {
+                expect(arg.check(context)?, Type::TString)?;
+                Ok(Type::TVoid)
+            },
         }
     }
 }

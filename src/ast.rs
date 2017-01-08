@@ -40,7 +40,7 @@ impl Item {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     EVar(String),
     EIntLit(i32),
@@ -53,7 +53,7 @@ pub enum Expr {
     EOp(Box<Expr>, BinOp, Box<Expr>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Predef {
     PrintInt(Box<Expr>),
     PrintString(Box<Expr>),
@@ -72,7 +72,7 @@ impl Predef {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
     Add,
     Sub,

@@ -32,7 +32,7 @@ Arg: Arg = {
     Type Identifier => Arg(<>),
 };
 
-pub Stmt: Stmt = {
+Stmt: Stmt = {
     OpenStmt => <>,
     ClosedStmt => <>,
 };

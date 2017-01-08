@@ -1,4 +1,4 @@
-mod type_checker;
+pub mod type_checker;
 mod errors;
 mod type_context;
 
