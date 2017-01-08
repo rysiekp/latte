@@ -53,6 +53,18 @@ impl ErrStack {
         Self::new(format!("main function is missing"))
     }
 
+    pub fn void_return_value() -> ErrStack {
+        Self::new(format!("void function cannot return value"))
+    }
+
+    pub fn void_argument() -> ErrStack {
+        Self::new(format!("arguments cannot be of type void"))
+    }
+
+    pub fn void_declaration() -> ErrStack {
+        Self::new(format!("cannot declare variable with type void"))
+    }
+
     pub fn add_to_stack<T: fmt::Display>(mut self, within: &T) -> ErrStack {
         self.stack.push(format!("{}", within));
         self

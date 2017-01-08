@@ -38,7 +38,6 @@ fn main() {
     let program = parser::parse(String::from(input));
     semantic_analysis::check_types(&program);
     let program = optimizer::optimize(program);
-    println!("{}", program);
     semantic_analysis::check_returns(&program);
     code_generation::run(&mut output, &program);
     use_llvm(utils::get_output_filename(".ll"), utils::get_output_filename(".bc"));

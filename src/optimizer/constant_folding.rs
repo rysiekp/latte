@@ -144,8 +144,6 @@ impl BinOp {
                 _ => op
             },
             BinOp::Mul => match (lhs, rhs) {
-                (Expr::EIntLit(0), _) |
-                (_, Expr::EIntLit(0)) => Expr::EIntLit(0),
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EIntLit(x * y),
                 _ => op
             },
@@ -159,14 +157,12 @@ impl BinOp {
                 _ => op
             },
             BinOp::And => match (lhs, rhs) {
-                (Expr::EBoolLit(false), _) |
-                (_, Expr::EBoolLit(false)) => Expr::EBoolLit(false),
+                (Expr::EBoolLit(false), _) => Expr::EBoolLit(false),
                 (Expr::EBoolLit(x), Expr::EBoolLit(y)) => Expr::EBoolLit(x && y),
                 _ => op
             },
             BinOp::Or => match (lhs, rhs) {
-                (Expr::EBoolLit(true), _) |
-                (_, Expr::EBoolLit(true)) => Expr::EBoolLit(true),
+                (Expr::EBoolLit(true), _) => Expr::EBoolLit(true),
                 (Expr::EBoolLit(x), Expr::EBoolLit(y)) => Expr::EBoolLit(x || y),
                 _ => op
             },

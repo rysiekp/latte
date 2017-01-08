@@ -90,6 +90,7 @@ impl TypeCheck<()> for Def {
         match *self {
             Def::DFun(_, _, ref args, ref block) => {
                 for arg in args {
+                    arg.do_check(context)?;
                     context.add(&arg.1, &arg.0)?;
                 }
                 for stmt in block {
@@ -97,6 +98,17 @@ impl TypeCheck<()> for Def {
                 }
                 Ok(())
             }
+        }
+    }
+}
+
+impl TypeCheck<()> for Arg {
+    fn do_check(&self, _: &mut TCContext) -> TError<()> {
+        let &Arg(ref t, _) = self;
+        if *t == Type::TVoid {
+            Err(ErrStack::void_argument())
+        } else {
+            Ok(())
         }
     }
 }
@@ -121,6 +133,9 @@ impl TypeCheck<()> for Stmt {
                 expect_one_of(context.get(var)?, expr.check(context)?, vec![Type::TInt, Type::TString, Type::TBool])?;
             },
             Stmt::SDecl(ref decl_type, ref decls) => {
+                if decl_type == &Type::TVoid {
+                    return Err(ErrStack::void_declaration())
+                }
                 for item in decls {
                     check_decl(item, decl_type, context)?;
                 }
@@ -143,6 +158,9 @@ impl TypeCheck<()> for Stmt {
                 expect(context.return_type(), Type::TVoid)?;
             },
             Stmt::SRet(ref expr) => {
+                if context.return_type() == Type::TVoid {
+                    return Err(ErrStack::void_return_value())
+                }
                 expect(expr.check(context)?, context.return_type())?;
             },
             Stmt::SBlock(ref stmts) => {
