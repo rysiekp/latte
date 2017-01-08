@@ -16,7 +16,7 @@ char *concat(char *s1, char *s2) {
 }
 
 void printString(char *s) {
-    printf("%s", s);
+    printf("%s\n", s);
 }
 
 void printInt(int x) {
@@ -26,6 +26,7 @@ void printInt(int x) {
 int readInt() {
     int x;
     scanf("%d", &x);
+    getchar();
     return x;
 }
 
@@ -34,6 +35,10 @@ char *readString() {
     size_t size = 0;
     if (getline(&res, &size, stdin) == -1) {
         return NULL;
+    }
+    size_t len = strlen(res);
+    if (res[0] != '\n') {
+        res[len - 1] = 0;
     }
     return res;
 }

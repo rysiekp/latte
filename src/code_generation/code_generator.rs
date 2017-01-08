@@ -22,7 +22,7 @@ impl Generator<()> for Program {
         context.add_code(format!("declare void @error()"));
         context.add_code(format!("declare i32 @readInt()"));
         context.add_code(format!("declare i8* @readString()"));
-        context.add_code(format!("declare i8* @concat(i8*, i8*)"));
+        context.add_code(format!("declare i8* @.concat(i8*, i8*)"));
 
         for def in defs {
             match def {
@@ -186,12 +186,18 @@ fn store_var(var: &String, val: &Val, var_type: &String, context: &mut CGContext
 }
 
 fn generate_item(item_type: &Type, item: &Item, context: &mut CGContext) {
+    let val = match *item {
+        Item::Init(_, ref expr) => {
+            expr.generate(context)
+        },
+        Item::NoInit(_) => {
+           item_type.default_value().generate(context)
+        },
+    };
+    let id = item.get_id();
     let reg = context.add(&item.get_id(), item_type);
     context.add_code(format!("{} = alloca {}", reg, item_type.to_llvm()));
-    match *item {
-        Item::Init(ref id, ref expr) => Stmt::SAss(id.clone(), expr.clone()).generate(context),
-        Item::NoInit(ref id) => Stmt::SAss(id.clone(), item_type.default_value()).generate(context),
-    }
+    store_var(&id, &val, &item_type.to_llvm(), context)
 }
 
 impl Type {
@@ -275,8 +281,9 @@ fn generate_op(lhs: &Expr, op: &BinOp, rhs: &Expr, context: &mut CGContext) -> R
             let rhs = rhs.generate(context);
             context.add_code(format!("br label {}", end_label));
 
+            let last_label = context.last_label();
             context.add_label(&end_label);
-            generate_assign(context, format!("phi i1 [0, {}], [{}, {}]", lhs_label, rhs, rhs_label))
+            generate_assign(context, format!("phi i1 [0, {}], [{}, {}]", lhs_label, rhs, last_label))
         },
         BinOp::Or => {
             let lhs_label = context.next_label();
@@ -292,15 +299,16 @@ fn generate_op(lhs: &Expr, op: &BinOp, rhs: &Expr, context: &mut CGContext) -> R
             let rhs = rhs.generate(context);
             context.add_code(format!("br label {}", end_label));
 
+            let last_label = context.last_label();
             context.add_label(&end_label);
-            generate_assign(context, format!("phi i1 [1, {}], [{}, {}]", lhs_label, rhs, rhs_label))
+            generate_assign(context, format!("phi i1 [1, {}], [{}, {}]", lhs_label, rhs, last_label))
         },
         BinOp::Add => {
             let t = lhs.get_type(context);
             let lhs = lhs.generate(context);
             let rhs = rhs.generate(context);
             match t {
-                Type::TString => generate_assign(context, format!("call i8* @concat(i8* {}, i8* {})", &lhs, &rhs)),
+                Type::TString => generate_assign(context, format!("call i8* @.concat(i8* {}, i8* {})", &lhs, &rhs)),
                 _ => generate_assign(context, format!("{} i32 {}, {}", op.to_llvm(), &lhs, &rhs)),
             }
         },

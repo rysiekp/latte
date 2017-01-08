@@ -1,5 +1,4 @@
 use lalrpop_util::ParseError;
-use std::io::Write;
 
 #[derive(Debug)]
 pub enum ErrorType {
@@ -8,42 +7,35 @@ pub enum ErrorType {
 
 type Error<'a> = ParseError<usize, (usize, &'a str), (ErrorType, String, usize)>;
 
-macro_rules! println_stderr(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-    } }
-);
-
-pub fn print_error<'a>(err: Error<'a>, input: String) {
+pub fn print_error<'a>(err: Error<'a>, input: String) -> String {
     match err {
         ParseError::InvalidToken { location } => invalid(input, location),
         ParseError::UnrecognizedToken { token: None, .. } => eof(),
         ParseError::UnrecognizedToken { token: Some((beg, t, end)), .. } => unrecognized(input, t.1, beg, end),
         ParseError::User { error: (err_type, err, loc) } => user(input, err_type, err, loc),
-        x => println!("{:?}", x),
+        x => format!("{:?}", x),
     }
 }
 
-fn eof() {
-    println_stderr!("err: unexpected EOF");
+fn eof() -> String {
+    format!("err: unexpected EOF")
 }
 
-fn invalid(s: String, loc: usize)  {
+fn invalid(s: String, loc: usize) -> String  {
     let (line_no, token_no) = count_line_and_pos(&s, loc);
-    println_stderr!("err: {}:{}: invalid token '{}'", line_no, token_no, s.chars().nth(loc).unwrap());
+    format!("err: {}:{}: invalid token '{}'", line_no, token_no, s.chars().nth(loc).unwrap())
 }
 
-fn unrecognized(s: String, token: &str, beg: usize, end: usize) {
+fn unrecognized(s: String, token: &str, beg: usize, end: usize) -> String {
     let (line_no, token_no) = count_line_and_pos(&s, beg);
-    println_stderr!("err: {}:{}-{}: unexpected token '{}'", line_no, token_no, token_no + (end - beg), token);
+    format!("err: {}:{}-{}: unexpected token '{}'", line_no, token_no, token_no + (end - beg), token)
 }
 
-fn user(s: String, err_type: ErrorType, err: String, loc: usize) {
+fn user(s: String, err_type: ErrorType, err: String, loc: usize) -> String {
     let (line_no, token_no) = count_line_and_pos(&s, loc);
     match err_type {
-        ErrorType::OverflowError => println_stderr!("err: {}:{}: integer number too large: {} ", line_no, token_no, err),
-    };
+        ErrorType::OverflowError => format!("err: {}:{}: integer number too large: {} ", line_no, token_no, err),
+    }
 }
 
 fn count_line_and_pos(s: &String, loc: usize) -> (usize, usize) {

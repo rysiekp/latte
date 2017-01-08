@@ -109,81 +109,94 @@ impl Fold for Expr {
             Expr::EOp(lhs, op, rhs) => {
                 let lhs = lhs.fold();
                 let rhs = rhs.fold();
-
-                if !lhs.is_constant() ||
-                    !rhs.is_constant() ||
-                    (rhs == Expr::EIntLit(0) && (op == BinOp::Div || op == BinOp::Mod)) {
-                    Expr::EOp(Box::new(lhs), op, Box::new(rhs))
-                } else {
-                    op.apply(lhs, rhs)
-                }
-            }
+                op.apply(lhs, rhs)
+            },
+            Expr::EApp(s, args) => Expr::EApp(s, args.into_iter().map(Expr::fold).collect()),
+            Expr::EPredef(p) => Expr::EPredef(p.fold()),
             _ => self
         }
     }
 }
 
-
+impl Fold for Predef {
+    fn fold(self) -> Predef {
+        match self {
+            Predef::Error |
+            Predef::ReadInt |
+            Predef::ReadString => self,
+            Predef::PrintInt(e) => Predef::PrintInt(Box::new(e.fold())),
+            Predef::PrintString(e) => Predef::PrintString(Box::new(e.fold())),
+        }
+    }
+}
 
 impl BinOp {
     fn apply(self, lhs: Expr, rhs: Expr) -> Expr {
+        let op = Expr::EOp(Box::new(lhs.clone()), self, Box::new(rhs.clone()));
         match self {
             BinOp::Add => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EIntLit(x + y),
                 (Expr::EStringLit(x), Expr::EStringLit(y)) => Expr::EStringLit(format!("{}{}", x, y)),
-                _ => unreachable!()
+                _ => op
             },
             BinOp::Sub => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EIntLit(x - y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::Mul => match (lhs, rhs) {
+                (Expr::EIntLit(0), _) |
+                (_, Expr::EIntLit(0)) => Expr::EIntLit(0),
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EIntLit(x * y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::Div => match (lhs, rhs) {
-                (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EIntLit(x / y),
-                _ => unreachable!(),
+                (e, Expr::EIntLit(1)) => e,
+                (Expr::EIntLit(x), Expr::EIntLit(y)) if y != 0 => Expr::EIntLit(x / y),
+                _ => op
             },
             BinOp::Mod => match (lhs, rhs) {
-                (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EIntLit(x % y),
-                _ => unreachable!(),
+                (Expr::EIntLit(x), Expr::EIntLit(y)) if y != 0 => Expr::EIntLit(x % y),
+                _ => op
             },
             BinOp::And => match (lhs, rhs) {
+                (Expr::EBoolLit(false), _) |
+                (_, Expr::EBoolLit(false)) => Expr::EBoolLit(false),
                 (Expr::EBoolLit(x), Expr::EBoolLit(y)) => Expr::EBoolLit(x && y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::Or => match (lhs, rhs) {
+                (Expr::EBoolLit(true), _) |
+                (_, Expr::EBoolLit(true)) => Expr::EBoolLit(true),
                 (Expr::EBoolLit(x), Expr::EBoolLit(y)) => Expr::EBoolLit(x || y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::EQ => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EBoolLit(x == y),
                 (Expr::EStringLit(x), Expr::EStringLit(y)) => Expr::EBoolLit(x == y),
                 (Expr::EBoolLit(x), Expr::EBoolLit(y)) => Expr::EBoolLit(x == y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::NEQ => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EBoolLit(x != y),
                 (Expr::EStringLit(x), Expr::EStringLit(y)) => Expr::EBoolLit(x != y),
                 (Expr::EBoolLit(x), Expr::EBoolLit(y)) => Expr::EBoolLit(x != y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::LT => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EBoolLit(x < y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::LE => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EBoolLit(x <= y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::GT => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EBoolLit(x > y),
-                _ => unreachable!(),
+                _ => op
             },
             BinOp::GE => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EBoolLit(x >= y),
-                _ => unreachable!(),
+                _ => op
             },
         }
     }

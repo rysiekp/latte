@@ -81,6 +81,7 @@ pub struct CGContext {
     consts: Consts,
     register: Register,
     label: Register,
+    last_label: Register,
     next_const: i32,
 }
 
@@ -91,6 +92,7 @@ impl CGContext {
             types: Types::new(),
             register: Register::Var(1),
             label: Register::Label(1),
+            last_label: Register::Label(1),
             output: vec![],
             consts: Consts::new(),
             next_const: 0,
@@ -132,11 +134,16 @@ impl CGContext {
         res
     }
 
+    pub fn last_label(&self) -> Register {
+        self.last_label
+    }
+
     pub fn add_code(&mut self, code: String) {
         self.output.push(code);
     }
 
     pub fn add_label(&mut self, label: &Register) {
+        self.last_label = *label;
         self.add_code(format!("L{}:", label.unwrap()));
     }
 
@@ -162,7 +169,6 @@ impl CGContext {
 
         let code = format!("{} = private unnamed_addr constant [{} x i8] c\"{}\0\"", const_no, s.len() + 1, s);
         self.output.insert(0, code);
-
         const_no
     }
 

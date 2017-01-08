@@ -3,14 +3,12 @@ extern crate lalrpop_util;
 pub mod ast;
 mod ast_printer;
 mod semantic_analysis;
-#[macro_use]
 mod parser;
 mod code_generation;
 mod optimizer;
+mod utils;
 
 use std::fs::File;
-use std::process::exit;
-use std::io::Write;
 use std::process::Command;
 
 fn use_llvm(ll_path: String, bc_path: String) {
@@ -34,55 +32,15 @@ fn use_llvm(ll_path: String, bc_path: String) {
 }
 
 fn main() {
-    let input = "\
-                int fib1(int n) {\n\
-                    if (n < 2) {\n\
-                        return n;\n\
-                    }\n\
-                    return fib1(n - 1) + fib1(n - 2);\n\
-                }\n\
-                int fib2(int n) {\n\
-                    if (n < 2) {\n\
-                        return n;\n\
-                    }
-                    int prev1 = 0, prev2 = 1;\n\
-                    int i = 2;\n\
-                    int res = 0;\n\
-                    while (i <= n) {\n\
-                        i++;\n\
-                        res = prev1 + prev2;\n\
-                        prev1 = prev2;\n\
-                        prev2 = res;\n\
-                    }\n\
-                    return res;
-
-                }\n\
-                int main() {\n\
-                    readString();
-                    while (true) {\n\
-                        int x = readInt();\n\
-                        string s = readString();\n\
-                        printString(s + s);\n\
-                        printInt(fib1(x));\n\
-                        printInt(fib2(x));\n\
-                    }\n\
-                    return 0;\n\
-                }";
-    let filename = "test.ll";
+    let input = utils::get_input();
+    let filename = utils::get_output_filename(".ll");
     let mut output = File::create(filename).unwrap();
-    match parser::parse(String::from(input)) {
-        Some(program) => match semantic_analysis::check(&program) {
-            Ok(_) => {
-                code_generation::run(&mut output, &optimizer::optimize(program));
-                use_llvm(String::from("test.ll"), String::from("test.bc"));
-                println!("OK");
-            },
-            Err(err) => {
-                println_stderr!("ERROR");
-                println_stderr!("{}", err);
-                exit(-1);
-            },
-        },
-        None => exit(-1),
-    }
+    let program = parser::parse(String::from(input));
+    semantic_analysis::check_types(&program);
+    let program = optimizer::optimize(program);
+    println!("{}", program);
+    semantic_analysis::check_returns(&program);
+    code_generation::run(&mut output, &program);
+    use_llvm(utils::get_output_filename(".ll"), utils::get_output_filename(".bc"));
+    println!("OK");
 }

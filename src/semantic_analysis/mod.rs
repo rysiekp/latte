@@ -3,6 +3,7 @@ mod errors;
 mod type_context;
 
 use semantic_analysis::errors::*;
+use utils::print_err;
 use ast::Program;
 use std::fmt;
 
@@ -20,7 +21,16 @@ impl fmt::Display for Error {
     }
 }
 
-pub fn check(program: &Program) -> Result<(), Error> {
-    type_checker::check(program).map_err(|err| Error::Type(err))?;
-    type_checker::check_return(program).map_err(|err| Error::Return(err))
+pub fn check_types(program: &Program) {
+    match type_checker::check(program).map_err(|err| Error::Type(err)) {
+        Ok(_) => (),
+        Err(err) => print_err(format!("{}", err)),
+    }
+}
+
+pub fn check_returns(program: &Program) {
+    match type_checker::check_return(program).map_err(|err| Error::Return(err)) {
+        Ok(_) => (),
+        Err(err) => print_err(format!("{}", err)),
+    }
 }

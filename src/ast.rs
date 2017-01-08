@@ -1,15 +1,15 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program(pub Vec<Def>);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Def {
     DFun(Type, String, Vec<Arg>, Vec<Stmt>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Arg(pub Type, pub String);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Empty,
     SDecl(Type, Vec<Item>),
@@ -25,7 +25,7 @@ pub enum Stmt {
     SBlock(Vec<Stmt>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Item {
     NoInit(String),
     Init(String, Expr),

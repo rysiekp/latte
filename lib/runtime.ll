@@ -4,14 +4,14 @@
 %struct.__sFILEX = type opaque
 %struct.__sbuf = type { i8*, i32 }
 
-@.str = private unnamed_addr constant [3 x i8] c"%s\00", align 1
+@.str = private unnamed_addr constant [4 x i8] c"%s\0A\00", align 1
 @.str.1 = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
 @.str.2 = private unnamed_addr constant [3 x i8] c"%d\00", align 1
 @__stdinp = external global %struct.__sFILE*, align 8
 @.str.3 = private unnamed_addr constant [15 x i8] c"runtime error\0A\00", align 1
 
 ; Function Attrs: nounwind ssp uwtable
-define i8* @concat(i8*, i8*) #0 {
+define i8* @.concat(i8*, i8*) #0 {
   %3 = alloca i8*, align 8
   %4 = alloca i8*, align 8
   %5 = alloca i8*, align 8
@@ -86,7 +86,7 @@ define void @printString(i8*) #0 {
   %2 = alloca i8*, align 8
   store i8* %0, i8** %2, align 8
   %3 = load i8*, i8** %2, align 8
-  %4 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str, i32 0, i32 0), i8* %3)
+  %4 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str, i32 0, i32 0), i8* %3)
   ret void
 }
 
@@ -105,36 +105,59 @@ define void @printInt(i32) #0 {
 define i32 @readInt() #0 {
   %1 = alloca i32, align 4
   %2 = call i32 (i8*, ...) @scanf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.2, i32 0, i32 0), i32* %1)
-  %3 = load i32, i32* %1, align 4
-  ret i32 %3
+  %3 = call i32 @getchar()
+  %4 = load i32, i32* %1, align 4
+  ret i32 %4
 }
 
 declare i32 @scanf(i8*, ...) #1
+
+declare i32 @getchar() #1
 
 ; Function Attrs: nounwind ssp uwtable
 define i8* @readString() #0 {
   %1 = alloca i8*, align 8
   %2 = alloca i8*, align 8
   %3 = alloca i64, align 8
+  %4 = alloca i64, align 8
   store i8* null, i8** %2, align 8
   store i64 0, i64* %3, align 8
-  %4 = load %struct.__sFILE*, %struct.__sFILE** @__stdinp, align 8
-  %5 = call i64 @getline(i8** %2, i64* %3, %struct.__sFILE* %4)
-  %6 = icmp eq i64 %5, -1
-  br i1 %6, label %7, label %8
-
-; <label>:7                                       ; preds = %0
-  store i8* null, i8** %1, align 8
-  br label %10
+  %5 = load %struct.__sFILE*, %struct.__sFILE** @__stdinp, align 8
+  %6 = call i64 @getline(i8** %2, i64* %3, %struct.__sFILE* %5)
+  %7 = icmp eq i64 %6, -1
+  br i1 %7, label %8, label %9
 
 ; <label>:8                                       ; preds = %0
-  %9 = load i8*, i8** %2, align 8
-  store i8* %9, i8** %1, align 8
-  br label %10
+  store i8* null, i8** %1, align 8
+  br label %24
 
-; <label>:10                                      ; preds = %8, %7
-  %11 = load i8*, i8** %1, align 8
-  ret i8* %11
+; <label>:9                                       ; preds = %0
+  %10 = load i8*, i8** %2, align 8
+  %11 = call i64 @strlen(i8* %10)
+  store i64 %11, i64* %4, align 8
+  %12 = load i8*, i8** %2, align 8
+  %13 = getelementptr inbounds i8, i8* %12, i64 0
+  %14 = load i8, i8* %13, align 1
+  %15 = sext i8 %14 to i32
+  %16 = icmp ne i32 %15, 10
+  br i1 %16, label %17, label %22
+
+; <label>:17                                      ; preds = %9
+  %18 = load i64, i64* %4, align 8
+  %19 = sub i64 %18, 1
+  %20 = load i8*, i8** %2, align 8
+  %21 = getelementptr inbounds i8, i8* %20, i64 %19
+  store i8 0, i8* %21, align 1
+  br label %22
+
+; <label>:22                                      ; preds = %17, %9
+  %23 = load i8*, i8** %2, align 8
+  store i8* %23, i8** %1, align 8
+  br label %24
+
+; <label>:24                                      ; preds = %22, %8
+  %25 = load i8*, i8** %1, align 8
+  ret i8* %25
 }
 
 declare i64 @getline(i8**, i64*, %struct.__sFILE*) #1
