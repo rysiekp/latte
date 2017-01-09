@@ -166,8 +166,8 @@ impl CGContext {
         self.next_const = self.next_const + 1;
 
         self.consts.insert(s.clone(), const_no);
-
-        let code = format!("{} = private unnamed_addr constant [{} x i8] c\"{}\0\"", const_no, s.len() + 1, s);
+        let hex = s.bytes().fold(String::new(), |acc, char| format!("{}\\{:X}", acc, char));
+        let code = format!("{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"", const_no, s.len() + 1, hex);
         self.output.insert(0, code);
         const_no
     }

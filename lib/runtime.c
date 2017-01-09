@@ -34,11 +34,12 @@ char *readString() {
     char *res = NULL;
     size_t size = 0;
     if (getline(&res, &size, stdin) == -1) {
-        return NULL;
-    }
-    size_t len = strlen(res);
-    if (res[0] != '\n') {
-        res[len - 1] = 0;
+        res = (char*) malloc(1);
+        if (res != NULL) {
+            res[0] = 0;
+        }
+    } else {
+        res[strlen(res) - 1] = 0;
     }
     return res;
 }

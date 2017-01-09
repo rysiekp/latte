@@ -136,7 +136,6 @@ impl BinOp {
         match self {
             BinOp::Add => match (lhs, rhs) {
                 (Expr::EIntLit(x), Expr::EIntLit(y)) => Expr::EIntLit(x + y),
-                (Expr::EStringLit(x), Expr::EStringLit(y)) => Expr::EStringLit(format!("{}{}", x, y)),
                 _ => op
             },
             BinOp::Sub => match (lhs, rhs) {

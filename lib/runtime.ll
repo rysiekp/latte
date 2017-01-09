@@ -117,47 +117,42 @@ declare i32 @getchar() #1
 ; Function Attrs: nounwind ssp uwtable
 define i8* @readString() #0 {
   %1 = alloca i8*, align 8
-  %2 = alloca i8*, align 8
-  %3 = alloca i64, align 8
-  %4 = alloca i64, align 8
-  store i8* null, i8** %2, align 8
-  store i64 0, i64* %3, align 8
-  %5 = load %struct.__sFILE*, %struct.__sFILE** @__stdinp, align 8
-  %6 = call i64 @getline(i8** %2, i64* %3, %struct.__sFILE* %5)
-  %7 = icmp eq i64 %6, -1
-  br i1 %7, label %8, label %9
-
-; <label>:8                                       ; preds = %0
+  %2 = alloca i64, align 8
   store i8* null, i8** %1, align 8
-  br label %24
+  store i64 0, i64* %2, align 8
+  %3 = load %struct.__sFILE*, %struct.__sFILE** @__stdinp, align 8
+  %4 = call i64 @getline(i8** %1, i64* %2, %struct.__sFILE* %3)
+  %5 = icmp eq i64 %4, -1
+  br i1 %5, label %6, label %14
 
-; <label>:9                                       ; preds = %0
-  %10 = load i8*, i8** %2, align 8
-  %11 = call i64 @strlen(i8* %10)
-  store i64 %11, i64* %4, align 8
-  %12 = load i8*, i8** %2, align 8
-  %13 = getelementptr inbounds i8, i8* %12, i64 0
-  %14 = load i8, i8* %13, align 1
-  %15 = sext i8 %14 to i32
-  %16 = icmp ne i32 %15, 10
-  br i1 %16, label %17, label %22
+; <label>:6                                       ; preds = %0
+  %7 = call i8* @malloc(i64 1)
+  store i8* %7, i8** %1, align 8
+  %8 = load i8*, i8** %1, align 8
+  %9 = icmp ne i8* %8, null
+  br i1 %9, label %10, label %13
 
-; <label>:17                                      ; preds = %9
-  %18 = load i64, i64* %4, align 8
-  %19 = sub i64 %18, 1
-  %20 = load i8*, i8** %2, align 8
-  %21 = getelementptr inbounds i8, i8* %20, i64 %19
-  store i8 0, i8* %21, align 1
-  br label %22
+; <label>:10                                      ; preds = %6
+  %11 = load i8*, i8** %1, align 8
+  %12 = getelementptr inbounds i8, i8* %11, i64 0
+  store i8 0, i8* %12, align 1
+  br label %13
 
-; <label>:22                                      ; preds = %17, %9
-  %23 = load i8*, i8** %2, align 8
-  store i8* %23, i8** %1, align 8
-  br label %24
+; <label>:13                                      ; preds = %10, %6
+  br label %20
 
-; <label>:24                                      ; preds = %22, %8
-  %25 = load i8*, i8** %1, align 8
-  ret i8* %25
+; <label>:14                                      ; preds = %0
+  %15 = load i8*, i8** %1, align 8
+  %16 = call i64 @strlen(i8* %15)
+  %17 = sub i64 %16, 1
+  %18 = load i8*, i8** %1, align 8
+  %19 = getelementptr inbounds i8, i8* %18, i64 %17
+  store i8 0, i8* %19, align 1
+  br label %20
+
+; <label>:20                                      ; preds = %14, %13
+  %21 = load i8*, i8** %1, align 8
+  ret i8* %21
 }
 
 declare i64 @getline(i8**, i64*, %struct.__sFILE*) #1
